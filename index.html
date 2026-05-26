@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EM-Wellen · Beugungsgitter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:         #0a0b0e;
+  --panel:      #13151b;
+  --panel2:     #181b22;
+  --border:     #252830;
+  --text:       #d4d8e4;
+  --text-dim:   #8a94a8;
+  --text-bright:#e4e6ee;
+  --gold:       #d4a85a;
+  --blue:       #6ed0ff;
+  --orange:     #ffb455;
+  --red:        #ff7070;
+  --radius:     12px;
+  --radius-sm:  8px;
+}
+body.light {
+  --bg:         #f5f6fa;
+  --panel:      #ffffff;
+  --panel2:     #eef0f6;
+  --border:     #c8cbd8;
+  --text:       #2a2d3a;
+  --text-dim:   #555e7a;
+  --text-bright:#1a1d2e;
+  --gold:       #a07020;
+  --blue:       #1a7fb5;
+  --orange:     #c06000;
+  --red:        #c0302a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header { border-bottom: 1px solid var(--border); }
+.header-inner {
+  max-width: 1400px; margin: 0 auto;
+  padding: 32px 48px 24px; position: relative;
+}
+.theme-toggle {
+  position: absolute; top: 32px; right: 48px;
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 18px; width: 36px; height: 36px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s;
+}
+.theme-toggle:hover { border-color: var(--text-dim); color: var(--text-bright); }
+.header-title h1 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400; font-size: 30px; color: var(--text-bright);
+  letter-spacing: .01em; line-height: 1.15;
+}
+.header-title h1 em { font-style: italic; color: var(--gold); }
+.header-title p {
+  margin-top: 6px; font-size: 17px; font-weight: 400;
+  color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase;
+  font-family: 'DM Mono', monospace;
+}
+
+/* ── Main ── */
+main { max-width: 1400px; margin: 0 auto; padding: 26px 48px 52px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Section label ── */
+.section-label {
+  font-size: 18px; font-family: 'DM Mono', monospace;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--gold);
+  display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── Sliders ── */
+.sliders { display: grid; gap: 10px; }
+.sliders-3 { grid-template-columns: repeat(3, 1fr); }
+.slider-group {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 14px;
+}
+.slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 3px; }
+.slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 15px; color: var(--text-bright); }
+.slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 2px;
+  background: var(--border); outline: none; border-radius: 999px; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid currentColor; background: var(--bg); cursor: pointer;
+  transition: transform .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+input[type=range]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid currentColor; background: var(--bg); cursor: pointer;
+}
+
+/* ── Presets ── */
+.presets { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.presets-label { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+.preset-btn {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 5px 14px; cursor: pointer; transition: border-color .15s, color .15s; letter-spacing: .04em;
+}
+.preset-btn:hover  { border-color: var(--gold); color: var(--gold); }
+.preset-btn.active { border-color: var(--gold); color: var(--gold); }
+
+/* ── Simulation layout ── */
+.sim-layout { display: flex; gap: 14px; align-items: flex-start; }
+
+/* ── Source panel ── */
+.source-panel {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 10px 6px; flex-shrink: 0; width: 278px;
+}
+.sp-title {
+  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-dim); padding: 0 4px; margin-bottom: 6px;
+  display: flex; justify-content: space-between;
+}
+.sp-header {
+  display: grid; grid-template-columns: 34px 1fr 1fr 1fr;
+  gap: 3px; margin-bottom: 2px;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase;
+  padding: 0 4px;
+}
+.sp-header span { text-align: center; }
+.source-row {
+  display: grid; grid-template-columns: 34px 1fr 1fr 1fr;
+  gap: 3px; align-items: center; padding: 2px 4px;
+  border-radius: 6px;
+}
+.source-row:hover { background: var(--panel2); }
+.src-num {
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim);
+  text-align: right; padding-right: 5px; user-select: none; line-height: 1;
+}
+.src-ctrl { display: flex; flex-direction: column; gap: 0; }
+.src-ctrl input[type=range] { margin: 3px 0 1px; height: 2px; }
+.src-val { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); text-align: center; }
+
+/* ── Canvas area ── */
+.canvas-area { flex: 1; min-width: 0; }
+.canvas-wrap {
+  width: 100%; aspect-ratio: 16/10;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+canvas#field { display: block; width: 100%; height: 100%; }
+
+/* ── Stats bar ── */
+.stats-bar {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px 22px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat-label { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text-bright); letter-spacing: .06em; }
+.stat-val   { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-dim); }
+
+/* ── Responsive ── */
+@media (max-width: 920px) {
+  .header-inner { padding: 22px 20px 18px; }
+  .theme-toggle { top: 22px; right: 20px; }
+  main { padding: 18px 16px 40px; }
+  .sim-layout { flex-direction: column; }
+  .source-panel { width: 100%; }
+  .sp-header, .source-row { grid-template-columns: 34px repeat(3, 1fr); }
+  .sliders-3 { grid-template-columns: 1fr 1fr; }
+  .canvas-wrap { aspect-ratio: 16/10; }
+}
+@media (max-width: 500px) {
+  .header-title h1 { font-size: 22px; }
+  .header-title p  { font-size: 13px; }
+  .sliders-3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☀</button>
+    <div class="header-title">
+      <h1>EM-Wellen · <em>Beugungsgitter</em></h1>
+      <p>Interaktive Simulation — N kohärente Punktquellen</p>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div>
+    <div class="section-label">Globale Parameter</div>
+    <div class="sliders sliders-3">
+      <div class="slider-group" style="color:var(--gold)">
+        <div class="slider-label">
+          <span class="pname">f₀</span>
+          <span class="pval" id="val-f0">1.00 GHz</span>
+        </div>
+        <input type="range" id="sl-f0" min="1" max="100" value="10" step="1">
+      </div>
+      <div class="slider-group" style="color:var(--blue)">
+        <div class="slider-label">
+          <span class="pname">d</span>
+          <span class="pval" id="val-d">45 cm &nbsp;·&nbsp; d/λ = 1.50</span>
+        </div>
+        <input type="range" id="sl-d" min="5" max="200" value="45" step="1">
+      </div>
+      <div class="slider-group" style="color:var(--blue)">
+        <div class="slider-label">
+          <span class="pname">N</span>
+          <span class="pval" id="val-N">10</span>
+        </div>
+        <input type="range" id="sl-N" min="1" max="16" value="10" step="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="presets">
+    <span class="presets-label">Anzeige</span>
+    <button class="preset-btn active" id="btn-field-E">E<sub>z</sub></button>
+    <button class="preset-btn"        id="btn-field-B">|B|</button>
+    <span class="presets-label" style="margin-left:8px">Presets</span>
+    <button class="preset-btn" id="btn-reset">Reset</button>
+    <button class="preset-btn" id="btn-alt">Alt. Phase</button>
+    <button class="preset-btn" id="btn-beam">Beam-Steering</button>
+    <button class="preset-btn" id="btn-rnd">Zufällige Phase</button>
+    <button class="preset-btn" id="btn-half">Hälfte aus</button>
+  </div>
+
+  <div class="sim-layout">
+    <div class="source-panel">
+      <div class="sp-title">
+        <span>Quellen</span><span>A · f× · φ</span>
+      </div>
+      <div class="sp-header">
+        <span></span><span>A</span><span>f ×</span><span>φ / π</span>
+      </div>
+      <div id="source-rows"></div>
+    </div>
+
+    <div class="canvas-area">
+      <div class="canvas-wrap">
+        <canvas id="field"></canvas>
+      </div>
+      <div class="slider-group" style="margin-top:8px; color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">x<sub>max</sub></span>
+          <span class="pval" id="val-xl1">11 λ</span>
+        </div>
+        <input type="range" id="sl-xl1" min="1" max="100" value="11" step="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat"><span class="stat-label">λ</span><span class="stat-val" id="st-lam">—</span></div>
+    <div class="stat"><span class="stat-label">T</span><span class="stat-val" id="st-T">—</span></div>
+    <div class="stat"><span class="stat-label">k</span><span class="stat-val" id="st-k">—</span></div>
+    <div class="stat"><span class="stat-label">Gitterbreite</span><span class="stat-val" id="st-gw">—</span></div>
+    <div class="stat"><span class="stat-label">r_FF</span><span class="stat-val" id="st-rff">—</span></div>
+    <div class="stat"><span class="stat-label">Hauptmaxima</span><span class="stat-val" id="st-mm">—</span></div>
+    <div class="stat"><span class="stat-label">Simulation</span><span class="stat-val" id="st-fps">—</span></div>
+    <div class="stat"><span class="stat-label">Modus</span><span class="stat-val" id="st-mode">analytisch</span></div>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+// ── Physical constant ─────────────────────────────────────────────────────────
+const C_LIGHT = 299792458;
+
+// ── RdBu colormap (negative Ez → blue, positive → red) ───────────────────────
+const CM = [
+  [5,48,97],[33,102,172],[67,147,195],[146,197,222],[247,247,247],
+  [244,165,130],[214,96,77],[178,24,43],[103,0,31]
+];
+function cmRGB(t) {  // t ∈ [-1, 1]
+  const u = Math.max(0, Math.min(1, (t + 1) / 2));
+  const p = u * (CM.length - 1);
+  const lo = Math.min(Math.floor(p), CM.length - 2);
+  const f  = p - lo;
+  const a  = CM[lo], b = CM[lo + 1];
+  return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
+}
+
+// ── Sequential |B| colormap (black → purple → orange → yellow) ───────────────
+const CM_B = [
+  [5,5,10],[50,10,80],[130,20,50],[210,70,10],[240,160,20],[252,230,90],[255,255,220]
+];
+function cmRGB_B(t) {  // t ∈ [0, 1]  (|B| is always ≥ 0)
+  const p  = Math.max(0, Math.min(1, t)) * (CM_B.length - 1);
+  const lo = Math.min(Math.floor(p), CM_B.length - 2);
+  const f  = p - lo;
+  const a  = CM_B[lo], b = CM_B[lo + 1];
+  return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
+}
+
+// ── Field display mode ────────────────────────────────────────────────────────
+let fieldMode = 'E';  // 'E' → Ez colormap   'B' → |B| colormap + arrows
+
+// ── Grid constants ────────────────────────────────────────────────────────────
+const NX = 110, NY = 90;
+const XL0 = 0.3;
+let   XL1 = 11;   // x range in λ — controlled by sl-xl1 slider
+const YL0 = -7.5, YL1 = 7.5;    // y range in λ
+
+let rFF       = 0;     // Fraunhofer distance [λ]
+let screenLam = 10.0;  // screen/measurement position [λ]
+
+// ── Mutable simulation state ──────────────────────────────────────────────────
+let N_SRC  = 10;
+let f0     = 1e9;
+let d_m    = 0.45;   // physical slit spacing [m]; d/λ is derived from f0
+let d_lam  = 1.5;    // derived: d_m * f0 / C_LIGHT
+
+// 16 slots max; active = [0..N_SRC-1]
+let srcs = Array.from({length: 16}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+
+// Derived (recomputed on global param change)
+let lam, k0, T_per;
+const xGrid = new Float64Array(NX);
+const yGrid = new Float64Array(NY);
+const R_mat = new Float64Array(16 * NX * NY);  // R_mat[n*NX*NY + i*NY + j]
+
+// Screen accumulator (exponential decay)
+const screenAcc = new Float64Array(NY);
+const SCREEN_DECAY = 0.05;
+
+// Animation
+let simTime = 0;
+let lastTs  = null;
+let isLight = false;
+
+// FPS tracking
+let fpsCount = 0, fpsLast = 0, fpsVal = 0;
+
+// Canvas and offscreen buffer
+const canvas   = document.getElementById('field');
+const ctx      = canvas.getContext('2d');
+const offsc    = document.createElement('canvas');
+const offCtx   = offsc.getContext('2d');
+offsc.width    = NX;
+offsc.height   = NY;
+const imgData  = offCtx.createImageData(NX, NY);
+
+// ── Geometry recompute ────────────────────────────────────────────────────────
+function recompute() {
+  lam   = C_LIGHT / f0;
+  k0    = 2 * Math.PI / lam;
+  T_per = 1 / f0;
+  d_lam = d_m * f0 / C_LIGHT;  // d/λ changes with frequency
+
+  // Fraunhofer distance: r_FF = 2D²/λ, D = (N-1)·d
+  // Sets plot range so the boundary sits near the midpoint (capped at 55λ for resolution).
+  rFF = (N_SRC <= 1) ? 0 : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
+  // XL1 is slider-controlled; screenLam tracks r_FF within the current range.
+  screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
+
+  const D = d_lam * lam;
+  for (let i = 0; i < NX; i++)
+    xGrid[i] = (XL0 + (XL1 - XL0) * i / (NX - 1)) * lam;
+  for (let j = 0; j < NY; j++)
+    yGrid[j] = (YL0 + (YL1 - YL0) * j / (NY - 1)) * lam;
+
+  for (let n = 0; n < N_SRC; n++) {
+    const yn   = (n - (N_SRC - 1) / 2) * D;
+    const base = n * NX * NY;
+    for (let i = 0; i < NX; i++) {
+      const dx = xGrid[i];
+      for (let j = 0; j < NY; j++) {
+        const dy = yGrid[j] - yn;
+        R_mat[base + i * NY + j] = Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+  }
+  screenAcc.fill(0);
+  updateStats();
+}
+
+// ── Ez field computation ──────────────────────────────────────────────────────
+function computeField(t) {
+  const Ez = new Float32Array(NX * NY);
+  for (let n = 0; n < N_SRC; n++) {
+    const {amp, fmul, phase} = srcs[n];
+    if (amp < 1e-6) continue;
+    const om = fmul * 2 * Math.PI * f0;
+    const kn = om / C_LIGHT;
+    const ph = om * t + phase;
+    const base = n * NX * NY;
+    for (let i = 0; i < NX; i++) {
+      const b2 = base + i * NY;
+      for (let j = 0; j < NY; j++) {
+        const r = R_mat[b2 + j];
+        Ez[i * NY + j] += (amp / (r + 1e-10)) * Math.cos(ph - kn * r);
+      }
+    }
+  }
+  return Ez;
+}
+
+// Screen column: x closest to screenLam
+function iScreen() {
+  const Lm = screenLam * lam;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < NX; i++) {
+    const d = Math.abs(xGrid[i] - Lm);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+// ── rAF render loop ───────────────────────────────────────────────────────────
+function render(ts) {
+  requestAnimationFrame(render);
+
+  const dt = lastTs === null ? 0 : Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+  simTime += dt * 2.5;  // 2.5 periods per real second
+
+  // FPS
+  fpsCount++;
+  if (ts - fpsLast > 1000) {
+    fpsVal = Math.round(fpsCount * 1000 / (ts - fpsLast));
+    fpsCount = 0; fpsLast = ts;
+    document.getElementById('st-fps').textContent = fpsVal + ' fps';
+  }
+
+  // Use LW field from server when available; fall back to analytical otherwise.
+  // wsSendParams() is driven by the ws.onmessage callback (response-pipelined).
+  const Ez = (wsActive && wsLatestEz) ? wsLatestEz : computeField(simTime * T_per);
+
+  // ── Pixel fill: E mode uses RdBu(Ez), B mode uses sequential(|B|) ───────────
+  const px = imgData.data;
+  const showB = fieldMode === 'B' && wsActive && wsLatestBx && wsLatestBy;
+
+  if (showB) {
+    // Compute |B| and its RMS for tanh scale
+    let s2B = 0;
+    for (let k = 0; k < NX * NY; k++) {
+      const bm = Math.sqrt(wsLatestBx[k] * wsLatestBx[k] + wsLatestBy[k] * wsLatestBy[k]);
+      s2B += bm * bm;
+    }
+    const scaleB = 1 / (Math.sqrt(s2B / (NX * NY)) * 4 + 1e-30);
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const bm  = Math.sqrt(wsLatestBx[i*NY+j] ** 2 + wsLatestBy[i*NY+j] ** 2);
+        const rgb = cmRGB_B(Math.tanh(bm * scaleB));
+        const idx = ((NY - 1 - j) * NX + i) * 4;
+        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+      }
+    }
+  } else {
+    // E mode (or B mode without server: fall back to Ez)
+    let s2 = 0;
+    for (let k = 0; k < Ez.length; k++) s2 += Ez[k] * Ez[k];
+    const scale = 1 / (Math.sqrt(s2 / Ez.length) * 4 + 1e-30);
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const rgb = cmRGB(Math.tanh(Ez[i * NY + j] * scale));
+        const idx = ((NY - 1 - j) * NX + i) * 4;
+        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+      }
+    }
+  }
+  offCtx.putImageData(imgData, 0, 0);
+
+  // Update screen accumulator
+  const is = iScreen();
+  for (let j = 0; j < NY; j++) {
+    const v = Ez[is * NY + j];
+    screenAcc[j] = screenAcc[j] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+  }
+
+  draw();
+}
+
+// ── Canvas draw ───────────────────────────────────────────────────────────────
+function draw() {
+  const dpr  = window.devicePixelRatio || 1;
+  const cssW = canvas.offsetWidth  || 800;
+  const cssH = canvas.offsetHeight || 500;
+
+  // Resize backing store if needed
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw; canvas.height = ph;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W = cssW, H = cssH;
+  const SCREEN_W = Math.max(100, Math.round(W * 0.20));
+  const FIELD_W  = W - SCREEN_W - 1;
+  const xTickStep = XL1 < 14 ? 2 : XL1 < 30 ? 5 : XL1 < 60 ? 10 : 20;
+
+  // Theme colours
+  const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
+  const PANEL  = isLight ? '#f0f2f8' : '#13151b';
+  const BORDER = isLight ? '#c8cbd8' : '#252830';
+  const AXIS   = isLight ? '#555e7a' : '#8898b8';
+  const GRID   = isLight ? '#d0d4e0' : '#222838';
+  const CYAN   = isLight ? '#1a7fb5' : '#6ed0ff';
+  const GOLD   = isLight ? '#a07020' : '#d4a85a';
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── 2D field ──────────────────────────────────────────────────────────────
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(offsc, 0, 0, FIELD_W, H);
+
+  // Helper: physics λ → canvas px
+  const xPx = xl => (xl - XL0) / (XL1 - XL0) * FIELD_W;
+  const yPx = yl => (1 - (yl - YL0) / (YL1 - YL0)) * H;
+
+  // Grid lines (faint)
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  for (let v = xTickStep; v < XL1; v += xTickStep) {
+    const xp = xPx(v); if (xp < 0 || xp > FIELD_W) continue;
+    ctx.beginPath(); ctx.moveTo(xp, 0); ctx.lineTo(xp, H); ctx.stroke();
+  }
+  [-6,-4,-2,0,2,4,6].forEach(v => {
+    const yp = yPx(v);
+    ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(FIELD_W, yp); ctx.stroke();
+  });
+
+  // Fraunhofer boundary — shown when r_FF falls inside the visible range
+  if (rFF > XL0 + 0.5 && rFF < XL1 * 0.99) {
+    const xRFF = xPx(rFF);
+    ctx.beginPath(); ctx.moveTo(xRFF, 0); ctx.lineTo(xRFF, H);
+    ctx.strokeStyle = GOLD + '88'; ctx.lineWidth = 1.0;
+    ctx.setLineDash([3, 6]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `300 11px 'DM Mono', monospace`;
+    ctx.fillStyle = GOLD + 'aa';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('r_FF', xRFF + 3, 6);
+  }
+
+  // ── B field vectors (B mode only) ──────────────────────────────────────────
+  // Arrows show the in-plane direction of B on top of the |B| colormap.
+  if (fieldMode === 'B' && wsActive && wsLatestBx && wsLatestBy) {
+    const GSTEP    = 8;
+    const xStep_px = FIELD_W / NX * GSTEP;
+    const yStep_px = H        / NY * GSTEP;
+    const maxLen   = Math.min(xStep_px, yStep_px) * 0.44;
+    const headFrac = 0.28;
+
+    // Max |B| across sampled points (for normalization)
+    let Bmax = 1e-30;
+    for (let i = 0; i < NX; i += GSTEP)
+      for (let j = 0; j < NY; j += GSTEP) {
+        const bx = wsLatestBx[i * NY + j], by = wsLatestBy[i * NY + j];
+        const bm = Math.sqrt(bx * bx + by * by);
+        if (bm > Bmax) Bmax = bm;
+      }
+
+    ctx.strokeStyle = isLight ? '#c0600099' : '#ffb455aa';
+    ctx.lineWidth   = 1.1;
+
+    const offset = GSTEP >> 1;   // centre arrows in their cell
+    for (let i = offset; i < NX; i += GSTEP) {
+      for (let j = offset; j < NY; j += GSTEP) {
+        const bx = wsLatestBx[i * NY + j];
+        const by = wsLatestBy[i * NY + j];
+        const bm = Math.sqrt(bx * bx + by * by);
+        if (bm < Bmax * 0.07) continue;   // skip near-zero
+
+        const xl = XL0 + (XL1 - XL0) * i / (NX - 1);
+        const yl = YL0 + (YL1 - YL0) * j / (NY - 1);
+        const cx = xPx(xl), cy = yPx(yl);
+        if (cx < 2 || cx > FIELD_W - 2) continue;
+
+        // Arrow length: compressed power scale so weak far-field arrows remain visible
+        const len  = Math.pow(bm / Bmax, 0.45) * maxLen;
+        const ux   =  bx / bm;   // unit vector x (canvas x same as physical x)
+        const uy   = -by / bm;   // unit vector y (flip: canvas y is down)
+        const tx   = cx + ux * len * 0.5,  ty  = cy + uy * len * 0.5;   // tip
+        const rx   = cx - ux * len * 0.5,  ry  = cy - uy * len * 0.5;   // root
+        const hl   = len * headFrac;
+        const ang  = Math.atan2(uy, ux);
+
+        ctx.beginPath();
+        ctx.moveTo(rx, ry); ctx.lineTo(tx, ty);
+        ctx.lineTo(tx - hl * Math.cos(ang - Math.PI / 5), ty - hl * Math.sin(ang - Math.PI / 5));
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - hl * Math.cos(ang + Math.PI / 5), ty - hl * Math.sin(ang + Math.PI / 5));
+        ctx.stroke();
+      }
+    }
+
+  }
+
+  // ── Field mode label (top-left of 2D field) ─────────────────────────────────
+  ctx.font = `400 12px 'DM Mono', monospace`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  if (fieldMode === 'B' && wsActive && wsLatestBx) {
+    ctx.fillStyle = isLight ? '#c06000dd' : '#ffb455dd';
+    ctx.fillText('|B|', 8, 6);
+  } else {
+    ctx.fillStyle = isLight ? '#1a7fb5dd' : '#6ed0ffdd';
+    ctx.fillText('Ez', 8, 6);
+    if (fieldMode === 'B') {   // B requested but no server
+      ctx.fillStyle = isLight ? '#555e7a99' : '#8a94a899';
+      ctx.fillText('(server required)', 30, 6);
+    }
+  }
+
+  // Screen / measurement line at x = screenLam
+  const xScr = xPx(screenLam);
+  ctx.beginPath(); ctx.moveTo(xScr, 0); ctx.lineTo(xScr, H);
+  ctx.strokeStyle = CYAN + 'aa'; ctx.lineWidth = 1.2;
+  ctx.setLineDash([4,5]); ctx.stroke(); ctx.setLineDash([]);
+
+  // Source dots (at x = 0λ, which is left of the grid)
+  const D_lam = d_lam;
+  for (let n = 0; n < N_SRC; n++) {
+    if (srcs[n].amp < 1e-6) continue;
+    const yn = (n - (N_SRC - 1) / 2) * D_lam;
+    const xp = 7, yp = yPx(yn);
+    ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = BG; ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+  }
+
+  // Axis tick labels
+  ctx.font = `300 12px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS;
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  for (let v = xTickStep; v < XL1; v += xTickStep) {
+    const xp = xPx(v);
+    if (xp > 12 && xp < FIELD_W - 6) ctx.fillText(v, xp, H - 2);
+  }
+  ctx.fillText('x/λ', FIELD_W - 14, H - 2);
+
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  [-6,-4,-2,2,4,6].forEach(v => {
+    const yp = yPx(v);
+    if (yp > 8 && yp < H - 6) ctx.fillText(v, 22, yp);
+  });
+  ctx.save();
+  ctx.translate(10, H / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('y/λ', 0, 0);
+  ctx.restore();
+
+  // ── Divider ───────────────────────────────────────────────────────────────
+  ctx.beginPath(); ctx.moveTo(FIELD_W, 0); ctx.lineTo(FIELD_W, H);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
+
+  // ── Screen intensity panel ─────────────────────────────────────────────────
+  const SX     = FIELD_W + 1;
+  const AXIS_W = 46;                      // left margin for y-axis labels+ticks
+  const CURVE_X0 = SX + AXIS_W + 1;      // x where curve starts
+  const iPW    = SCREEN_W - AXIS_W - 4;  // width of curve area
+
+  ctx.fillStyle = PANEL;
+  ctx.fillRect(SX, 0, SCREEN_W, H);
+
+  // ── Y-axis scale ──────────────────────────────────────────────────────────
+  // Physical y range in meters
+  const yMaxPhys = YL1 * lam;   // e.g. 7.5 * lam [m]
+  const yMinPhys = YL0 * lam;
+
+  // Pick the largest unit where |yMaxPhys| / scale >= 0.5
+  const UNITS = [
+    {label:'km', scale:1e3}, {label:'m', scale:1}, {label:'mm', scale:1e-3},
+    {label:'µm', scale:1e-6}, {label:'nm', scale:1e-9}, {label:'pm', scale:1e-12}
+  ];
+  const unit = UNITS.find(u => Math.abs(yMaxPhys) / u.scale >= 0.5) || UNITS[UNITS.length - 1];
+
+  const yMin_u = yMinPhys / unit.scale;
+  const yMax_u = yMaxPhys / unit.scale;
+
+  // Nice tick step
+  const rough  = (yMax_u - yMin_u) / 5;
+  const exp10  = Math.pow(10, Math.floor(Math.log10(Math.abs(rough))));
+  const frac   = rough / exp10;
+  const nFrac  = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
+  const tStep  = nFrac * exp10;
+
+  const firstTick = Math.ceil(yMin_u / tStep + 1e-9) * tStep;
+  const lastTick  = Math.floor(yMax_u / tStep - 1e-9) * tStep;
+
+  // Axis spine
+  ctx.beginPath();
+  ctx.moveTo(SX + AXIS_W, 0); ctx.lineTo(SX + AXIS_W, H);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
+
+  // Ticks and labels
+  ctx.font = `300 11px 'DM Mono', monospace`;
+  ctx.textAlign  = 'right';
+  ctx.textBaseline = 'middle';
+  for (let v = firstTick; v <= lastTick + tStep * 0.01; v += tStep) {
+    // Round away float drift
+    v = Math.round(v / (tStep * 1e-6)) * tStep * 1e-6;
+    const yLam = (v * unit.scale) / lam;
+    const yp   = (1 - (yLam - YL0) / (YL1 - YL0)) * H;
+    if (yp < 4 || yp > H - 4) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+
+    // Format tick label: drop trailing zeros
+    const dec = Math.max(0, -Math.floor(Math.log10(Math.abs(tStep))) );
+    const label = v.toFixed(Math.min(dec, 3));
+    ctx.fillStyle = AXIS;
+    ctx.fillText(label, SX + AXIS_W - 7, yp);
+  }
+
+  // Unit label at top of axis
+  ctx.font = `300 10px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(unit.label, SX + AXIS_W / 2, 3);
+
+  // Horizontal grid lines at tick positions
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  for (let v = firstTick; v <= lastTick + tStep * 0.01; v += tStep) {
+    v = Math.round(v / (tStep * 1e-6)) * tStep * 1e-6;
+    const yLam = (v * unit.scale) / lam;
+    const yp   = (1 - (yLam - YL0) / (YL1 - YL0)) * H;
+    if (yp < 2 || yp > H - 2) continue;
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + SCREEN_W, yp); ctx.stroke();
+  }
+
+  // Vertical grid lines (intensity fractions)
+  [0.25, 0.5, 0.75, 1.0].forEach(f => {
+    const xp = CURVE_X0 + f * iPW;
+    ctx.beginPath(); ctx.moveTo(xp, 0); ctx.lineTo(xp, H); ctx.stroke();
+  });
+
+  // ── Accumulated screen intensity curve ────────────────────────────────────
+  const Imax = Math.max(...screenAcc, 1e-30);
+  ctx.beginPath();
+  for (let j = 0; j < NY; j++) {
+    const xp = CURVE_X0 + (screenAcc[j] / Imax) * iPW;
+    const yp = (1 - j / (NY - 1)) * H;
+    j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+  }
+  ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
+
+  // ── Analytical far-field overlay (phasor sum — valid for any A, φ) ──────────
+  // Condition: all sources share the same frequency (fmul ≈ 1); A and φ can vary.
+  const allSameFreq = Array.from({length: N_SRC}, (_, n) => n)
+    .every(n => Math.abs(srcs[n].fmul - 1.0) < 0.01);
+  if (allSameFreq && N_SRC > 1) {
+    // Find peak amplitude for normalization (scan all j)
+    let I_peak = 0;
+    const I_buf = new Float32Array(NY);
+    for (let j = 0; j < NY; j++) {
+      const yLam  = YL0 + (YL1 - YL0) * j / (NY - 1);
+      const sinTh = yLam / Math.sqrt(screenLam * screenLam + yLam * yLam);
+      // Phase advance per unit source index relative to centre: k*d*sinθ
+      const kd_sin = 2 * Math.PI * d_lam * sinTh;
+      let re = 0, im = 0;
+      for (let n = 0; n < N_SRC; n++) {
+        const ph = kd_sin * (n - (N_SRC - 1) / 2) + srcs[n].phase;
+        re += srcs[n].amp * Math.cos(ph);
+        im += srcs[n].amp * Math.sin(ph);
+      }
+      I_buf[j] = re * re + im * im;
+      if (I_buf[j] > I_peak) I_peak = I_buf[j];
+    }
+    if (I_peak > 0) {
+      ctx.beginPath();
+      for (let j = 0; j < NY; j++) {
+        const xp = CURVE_X0 + (I_buf[j] / I_peak) * iPW;
+        const yp = (1 - j / (NY - 1)) * H;
+        j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+      }
+      ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  // Panel header labels
+  const midX = SX + AXIS_W + (SCREEN_W - AXIS_W) / 2;
+  ctx.font = `300 11px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('I (y)', midX, 4);
+  ctx.fillText('x = ' + screenLam.toFixed(1) + 'λ', midX, 17);
+  ctx.fillStyle = GOLD + 'bb'; ctx.fillText('— anal.', midX, 30);
+}
+
+// ── Stats bar ─────────────────────────────────────────────────────────────────
+function updateStats() {
+  if (!lam) return;
+  document.getElementById('st-lam').textContent = (lam * 100).toFixed(2) + ' cm';
+  document.getElementById('st-T').textContent   = (T_per * 1e9).toFixed(2) + ' ns';
+  document.getElementById('st-k').textContent   = k0.toFixed(1) + ' m⁻¹';
+  document.getElementById('st-gw').textContent  = ((N_SRC - 1) * d_lam).toFixed(2) + ' λ';
+  const mm = [-1, 0, 1].filter(m => Math.abs(m / d_lam) < 1)
+    .map(m => `m=${m}: ${(10 * m / d_lam).toFixed(2)}λ`).join('  ');
+  document.getElementById('st-mm').textContent  = mm || 'd/λ > 1, m=±1 outside';
+  const rFFtext = N_SRC <= 1 ? '—'
+    : rFF > XL1 ? '> ' + XL1.toFixed(0) + ' λ'
+    : rFF.toFixed(1) + ' λ';
+  document.getElementById('st-rff').textContent = rFFtext;
+}
+
+// ── Source panel builder ──────────────────────────────────────────────────────
+const rowsEl = document.getElementById('source-rows');
+let slA = [], slF = [], slP = [];
+let vlA = [], vlF = [], vlP = [];
+
+function buildRows() {
+  rowsEl.innerHTML = '';
+  slA = []; slF = []; slP = [];
+  vlA = []; vlF = []; vlP = [];
+
+  for (let nn = N_SRC - 1; nn >= 0; nn--) {
+    const n   = nn;
+    const row = document.createElement('div');
+    row.className = 'source-row';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'src-num';
+    lbl.textContent = n + 1;
+
+    function mkCell(min, max, step, init, fmt) {
+      const c  = document.createElement('div'); c.className = 'src-ctrl';
+      const sl = document.createElement('input'); sl.type = 'range';
+      sl.min = min; sl.max = max; sl.step = step; sl.value = init;
+      const vl = document.createElement('div'); vl.className = 'src-val';
+      vl.textContent = fmt(init);
+      c.append(sl, vl);
+      return {c, sl, vl};
+    }
+
+    const aI = Math.round(srcs[n].amp   * 100);
+    const fI = Math.round(srcs[n].fmul  * 100);
+    const pI = Math.round((srcs[n].phase / Math.PI) * 100);
+
+    const ca = mkCell(0,   100, 1,  aI, v => (v/100).toFixed(2));
+    const cf = mkCell(50,  200, 25, fI, v => (v/100).toFixed(2)+'×');
+    const cp = mkCell(-200,200, 25, pI, v => (v/100).toFixed(2)+'π');
+
+    ca.sl.addEventListener('input', () => {
+      srcs[n].amp = ca.sl.value / 100;
+      ca.vl.textContent = (ca.sl.value / 100).toFixed(2);
+      screenAcc.fill(0);
+    });
+    cf.sl.addEventListener('input', () => {
+      srcs[n].fmul = cf.sl.value / 100;
+      cf.vl.textContent = (cf.sl.value / 100).toFixed(2) + '×';
+      screenAcc.fill(0);
+    });
+    cp.sl.addEventListener('input', () => {
+      srcs[n].phase = (cp.sl.value / 100) * Math.PI;
+      cp.vl.textContent = (cp.sl.value / 100).toFixed(2) + 'π';
+      screenAcc.fill(0);
+    });
+
+    slA[n] = ca.sl; vlA[n] = ca.vl;
+    slF[n] = cf.sl; vlF[n] = cf.vl;
+    slP[n] = cp.sl; vlP[n] = cp.vl;
+
+    row.append(lbl, ca.c, cf.c, cp.c);
+    rowsEl.appendChild(row);
+  }
+}
+
+function syncRows() {
+  for (let n = 0; n < N_SRC; n++) {
+    slA[n].value = Math.round(srcs[n].amp   * 100);
+    slF[n].value = Math.round(srcs[n].fmul  * 100);
+    slP[n].value = Math.round((srcs[n].phase / Math.PI) * 100);
+    vlA[n].textContent = srcs[n].amp.toFixed(2);
+    vlF[n].textContent = srcs[n].fmul.toFixed(2) + '×';
+    vlP[n].textContent = (srcs[n].phase / Math.PI).toFixed(2) + 'π';
+  }
+  screenAcc.fill(0);
+}
+
+// ── Global slider wiring ──────────────────────────────────────────────────────
+function readGlobals() {
+  f0  = Number(document.getElementById('sl-f0').value) * 1e8;
+  d_m = Number(document.getElementById('sl-d').value) / 100;   // cm → m
+  const newN = Number(document.getElementById('sl-N').value);
+  // d_lam is set inside recompute(); read it after
+  recompute();
+  const dCm = (d_m * 100).toFixed(0);
+  const lamStr = lam >= 1 ? lam.toFixed(2) + ' m' : (lam * 100).toFixed(1) + ' cm';
+  document.getElementById('val-f0').textContent = (f0/1e9).toFixed(2) + ' GHz · λ = ' + lamStr;
+  document.getElementById('val-d').textContent  = dCm + ' cm · d/λ = ' + d_lam.toFixed(2);
+  document.getElementById('val-N').textContent  = newN;
+  if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
+}
+
+['sl-f0','sl-d','sl-N'].forEach(id =>
+  document.getElementById(id).addEventListener('input', readGlobals)
+);
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+function preset(fn) {
+  for (let n = 0; n < N_SRC; n++) fn(n);
+  syncRows();
+}
+document.getElementById('btn-reset').addEventListener('click', () =>
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; }));
+document.getElementById('btn-alt').addEventListener('click', () =>
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }));
+document.getElementById('btn-beam').addEventListener('click', () =>
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }));
+document.getElementById('btn-rnd').addEventListener('click', () =>
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }));
+document.getElementById('btn-half').addEventListener('click', () =>
+  preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }));
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  isLight = !isLight;
+  document.body.classList.toggle('light', isLight);
+  document.getElementById('theme-toggle').textContent = isLight ? '☾' : '☀';
+});
+
+// ── x-range slider ───────────────────────────────────────────────────────────
+document.getElementById('sl-xl1').addEventListener('input', () => {
+  XL1 = Number(document.getElementById('sl-xl1').value);
+  document.getElementById('val-xl1').textContent = XL1 + ' λ';
+  recompute();
+});
+
+// ── Field mode toggle ─────────────────────────────────────────────────────────
+['E', 'B'].forEach(mode => {
+  document.getElementById('btn-field-' + mode).addEventListener('click', () => {
+    fieldMode = mode;
+    document.getElementById('btn-field-E').classList.toggle('active', mode === 'E');
+    document.getElementById('btn-field-B').classList.toggle('active', mode === 'B');
+  });
+});
+
+// ── WebSocket / pycharge backend ──────────────────────────────────────────────
+// The server (server.py) computes the full Liénard-Wiechert field and streams
+// back a raw Float32Array of length NX*NY in Ez[i*NY+j] row-major order.
+// While the server is unreachable the app falls back to computeField() silently.
+
+let wsConn     = null;   // active WebSocket
+let wsActive   = false;  // connected and ready
+let wsPending  = false;  // request in flight
+let wsLatestEz = null;   // last received Ez field  (Float32Array, NX*NY)
+let wsLatestBx = null;   // last received Bx field  (Float32Array, NX*NY)
+let wsLatestBy = null;   // last received By field  (Float32Array, NX*NY)
+const WS_URL   = 'ws://127.0.0.1:8765/ws';
+
+function wsSendParams() {
+  if (!wsActive || wsPending || !wsConn) return;
+  wsPending = true;
+  wsConn.send(JSON.stringify({
+    f0:   f0,
+    d_m:  d_m,
+    N:    N_SRC,
+    srcs: srcs.slice(0, N_SRC).map(s => ({ amp: s.amp, fmul: s.fmul, phase: s.phase })),
+    t:    simTime * T_per,
+    xl1:  XL1
+  }));
+}
+
+function wsConnect() {
+  try {
+    const sock = new WebSocket(WS_URL);
+    sock.binaryType = 'arraybuffer';
+
+    sock.onopen = () => {
+      wsConn = sock; wsActive = true;
+      document.getElementById('st-mode').textContent = 'LW';
+      wsSendParams();
+    };
+
+    sock.onmessage = ev => {
+      if (ev.data instanceof ArrayBuffer) {
+        const n = NX * NY;
+        const all = new Float32Array(ev.data);
+        wsLatestEz = all.subarray(0,     n);
+        wsLatestBx = all.subarray(n,   2*n);
+        wsLatestBy = all.subarray(2*n, 3*n);
+      }
+      wsPending = false;
+      wsSendParams();   // immediately pipeline the next frame
+    };
+
+    sock.onclose = () => {
+      wsActive = false; wsPending = false; wsConn = null;
+      wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+      document.getElementById('st-mode').textContent = 'analytisch';
+      setTimeout(wsConnect, 3000);  // retry after 3 s
+    };
+
+    sock.onerror = () => sock.close();
+  } catch (e) {
+    setTimeout(wsConnect, 3000);
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+buildRows();
+readGlobals();
+wsConnect();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
