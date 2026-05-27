@@ -237,7 +237,8 @@ canvas#field { display: block; width: 100%; height: 100%; }
 var C_W   = 299792458;
 var NX_W  = 55, NY_W = 45;   // compute grid (upsampled 2× to NX_F×NY_F)
 var NX_F  = 110, NY_F = 90;  // output grid
-var XL0_W = 0.3;
+var XL0_W = 0.0;
+var MIN_R_W = 0.05;  // exclusion radius in wavelengths
 
 function upsample(src, sw, sh, dw, dh) {
   var dst = new Float32Array(dw * dh);
@@ -282,6 +283,8 @@ self.onmessage = function(ev) {
       var x = xA[i];
       for (var j = 0; j < NY_W; j++) {
         var y = yA[j];
+        var distToSrc = Math.sqrt(x * x + (y - yn) * (y - yn));
+        if (distToSrc < MIN_R_W * lam) continue;
 
         // Initial guess: retarded time assuming source near origin
         var tr = t - Math.sqrt(x * x + (y - yn) * (y - yn)) / C_W;
@@ -512,7 +515,8 @@ function cmRGB(t) {
 
 // ── Grid constants ────────────────────────────────────────────────────────────
 const NX = 110, NY = 90;
-const XL0 = 0.3;
+const XL0 = 0.0;
+const MIN_R_LAM = 0.05;  // exclusion radius in wavelengths
 let   XL1 = 10;
 let   ylHalf = 7.5;
 let YL0 = -ylHalf, YL1 = ylHalf;
@@ -681,6 +685,7 @@ function computeField(t) {
       const b2 = base + i * NY;
       for (let j = 0; j < NY; j++) {
         const r = R_mat[b2 + j];
+        if (r < MIN_R_LAM * lam) continue;
         Ez[i * NY + j] += (amp / (r + 1e-10)) * Math.cos(ph - kn * r);
       }
     }
@@ -940,7 +945,7 @@ function draw() {
   for (let n = 0; n < N_SRC; n++) {
     if (srcs[n].amp < 1e-6) continue;
     const yn = (n - (N_SRC - 1) / 2) * d_lam;
-    const xp = fx0 + 4, yp = yPx(yn);
+    const xp = xPx(0), yp = yPx(yn);
     ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
     ctx.fillStyle = BG; ctx.fill();
     ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
@@ -949,6 +954,8 @@ function draw() {
   ctx.font = `300 14px 'DM Mono', monospace`;
   ctx.fillStyle = AXIS; ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.beginPath(); ctx.moveTo(fx0, fy0); ctx.lineTo(fx0, fy0 - 5); ctx.stroke();
+  ctx.fillText('0', fx0, fy0 - 6);
   for (let v = xTickStep; v < XL1; v += xTickStep) {
     const xp = xPx(v);
     if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
