@@ -192,21 +192,44 @@ select.src-select:focus { border-color: var(--text-dim); }
 .canvas-wrap { width: 100%; height: 100%; overflow: hidden; }
 canvas#field { display: block; width: 100%; height: 100%; }
 
-/* ── Mobile ──────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  html, body { height: auto; overflow: auto; }
-  .app { flex-direction: column; }
-  .sidebar {
-    width: 100%; border-right: none; border-bottom: 1px solid var(--border);
-    overflow-y: visible;
-  }
-  .sb-stats { margin-top: 0; }
-  .canvas-area { flex: none; }
-  .canvas-wrap { height: auto; aspect-ratio: 16/10; }
+/* ── Mobile landscape: narrower sidebar, everything else unchanged ── */
+@media (max-width: 900px) and (orientation: landscape) {
+  :root { --sidebar-w: 180px; }
+}
+
+/* ── Portrait: rotate prompt ─────────────────────────────────────── */
+#rotate-prompt {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+  text-align: center; padding: 32px;
+}
+#rotate-prompt .rotate-icon {
+  font-size: 56px; line-height: 1;
+  animation: rotate-hint 2s ease-in-out infinite;
+}
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  40%       { transform: rotate(90deg); }
+  60%       { transform: rotate(90deg); }
+}
+#rotate-prompt p {
+  font-family: 'DM Mono', monospace; font-size: 14px;
+  color: var(--text-dim); max-width: 260px; line-height: 1.6;
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  #rotate-prompt { display: flex; }
+  .app, header { visibility: hidden; }
 }
 </style>
 </head>
 <body>
+<div id="rotate-prompt">
+  <div class="rotate-icon">📱</div>
+  <p>Bitte Gerät drehen, um die Simulation zu nutzen.</p>
+</div>
 
 <header>
   <div class="header-inner">
@@ -460,6 +483,34 @@ canvas.addEventListener('mousemove', e => {
 
 canvas.addEventListener('mouseup', () => { _screenDragging = false; });
 canvas.addEventListener('mouseleave', () => { _screenDragging = false; });
+
+canvas.addEventListener('touchstart', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.touches[0].clientX - rect.left;
+  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+  if (Math.abs(mx - xScr) < 20) {
+    _screenDragging = true;
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  if (!_screenDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.touches[0].clientX - rect.left;
+  const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
+  screenLam = Math.max(1, Math.min(XL1, newLam));
+  screenOverride = true;
+  const scrSl = document.getElementById('sl-scr');
+  if (scrSl) {
+    scrSl.value = screenLam.toFixed(1);
+    document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  }
+  screenAcc.fill(0);
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { _screenDragging = false; });
 
 function recompute() {
   lam   = C_LIGHT / f0;
