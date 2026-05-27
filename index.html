@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EM-Wellen · Beugungsgitter</title>
+<title>EM-Wellen · Feldlinien (Standalone)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;1,300;1,400&display=swap" rel="stylesheet">
 <style>
@@ -21,6 +21,7 @@
   --red:        #ff7070;
   --radius:     12px;
   --radius-sm:  8px;
+  --sidebar-w:  220px;
 }
 body.light {
   --bg:         #f5f6fa;
@@ -36,263 +37,441 @@ body.light {
   --red:        #c0302a;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 15px;
-  font-weight: 300;
-  line-height: 1.6;
-  min-height: 100vh;
+  background: var(--bg); color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 14px;
+  font-weight: 300; line-height: 1.5;
+  display: flex; flex-direction: column;
 }
 
-/* ── Header ── */
-header { border-bottom: 1px solid var(--border); }
+/* ── Header ─────────────────────────────────────────────────────── */
+header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--panel); }
 .header-inner {
-  max-width: 1400px; margin: 0 auto;
-  padding: 32px 48px 24px; position: relative;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
 }
-.theme-toggle {
-  position: absolute; top: 32px; right: 48px;
+.header-title {
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  font-weight: 400; color: var(--text-dim); letter-spacing: .05em;
+  flex-shrink: 0; margin-right: 4px;
+}
+.header-title strong { font-weight: 500; color: var(--text-bright); }
+.header-title em     { font-style: italic; color: var(--gold); }
+.load-area {
+  flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  opacity: 0; transition: opacity .2s;
+}
+.load-area.active { opacity: 1; }
+.load-bar-wrap {
+  height: 4px; border-radius: 2px;
+  background: var(--border); overflow: hidden;
+}
+.load-bar {
+  height: 100%; width: 40%; border-radius: 2px;
+  background: var(--gold);
+  animation: loadslide 2s linear infinite;
+}
+.load-text {
+  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em;
+  color: var(--text-dim); text-align: center;
+  opacity: 0; pointer-events: none; user-select: none;
+}
+/* reloading state: pause slide, show static bar, blink text */
+.load-area.reloading .load-bar {
+  animation: none;
+  width: 100%; transform: none;
+  opacity: 0.35;
+}
+.load-area.reloading .load-text {
+  animation: blink 1.4s ease-in-out infinite;
+}
+@keyframes loadslide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 0.7; }
+}
+.header-btn {
   background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  color: var(--text-dim); font-size: 18px; width: 36px; height: 36px;
+  color: var(--text-dim); font-size: 15px; width: 28px; height: 28px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: border-color .15s, color .15s;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
+}
+.header-btn:hover { border-color: var(--text-dim); color: var(--text-bright); }
+.theme-toggle { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 15px; width: 28px; height: 28px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
 }
 .theme-toggle:hover { border-color: var(--text-dim); color: var(--text-bright); }
-.header-title h1 {
-  font-family: 'Playfair Display', serif;
-  font-weight: 400; font-size: 30px; color: var(--text-bright);
-  letter-spacing: .01em; line-height: 1.15;
+
+/* ── App: sidebar + canvas ──────────────────────────────────────── */
+.app { display: flex; flex: 1; min-height: 0; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
 }
-.header-title h1 em { font-style: italic; color: var(--gold); }
-.header-title p {
-  margin-top: 6px; font-size: 17px; font-weight: 400;
-  color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase;
-  font-family: 'DM Mono', monospace;
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sb-group { padding: 6px 11px 10px; border-bottom: 1px solid var(--border); }
+.sb-group:last-child { border-bottom: none; }
+
+.sb-label {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  letter-spacing: .15em; text-transform: uppercase; color: var(--gold);
+  padding-bottom: 5px;
 }
 
-/* ── Main ── */
-main { max-width: 1400px; margin: 0 auto; padding: 26px 48px 52px; display: flex; flex-direction: column; gap: 16px; }
-
-/* ── Section label ── */
-.section-label {
-  font-size: 18px; font-family: 'DM Mono', monospace;
-  letter-spacing: .14em; text-transform: uppercase; color: var(--gold);
-  display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
-}
-.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
-/* ── Sliders ── */
-.sliders { display: grid; gap: 10px; }
-.sliders-3 { grid-template-columns: repeat(3, 1fr); }
-.slider-group {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 6px 14px;
-}
-.slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 3px; }
-.slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 15px; color: var(--text-bright); }
+.slider-group { margin-bottom: 7px; }
+.slider-group:last-child { margin-bottom: 0; }
+.slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
+.slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
 .slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
+
 input[type=range] {
   -webkit-appearance: none; width: 100%; height: 2px;
   background: var(--border); outline: none; border-radius: 999px; cursor: pointer;
 }
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
   border: 2px solid currentColor; background: var(--bg); cursor: pointer;
   transition: transform .15s;
 }
 input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
 input[type=range]::-moz-range-thumb {
-  width: 12px; height: 12px; border-radius: 50%;
+  width: 10px; height: 10px; border-radius: 50%;
   border: 2px solid currentColor; background: var(--bg); cursor: pointer;
 }
 
-/* ── Presets ── */
-.presets { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.presets-label { font-family: 'DM Mono', monospace; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); }
+select.src-select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 3px 6px; outline: none; cursor: pointer; margin-bottom: 7px;
+  -webkit-appearance: none; appearance: none;
+}
+select.src-select option { background: var(--panel); }
+select.src-select:focus { border-color: var(--text-dim); }
+
+.toggle-row { display: flex; flex-direction: column; gap: 6px; padding: 2px 0; user-select: none; }
+.toggle-row label {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-dim);
+}
+.toggle-row input[type=checkbox] { accent-color: var(--gold); width: 12px; height: 12px; cursor: pointer; flex-shrink: 0; }
+
+.preset-stack { display: flex; flex-direction: column; gap: 4px; }
 .preset-btn {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px;
-  padding: 5px 14px; cursor: pointer; transition: border-color .15s, color .15s; letter-spacing: .04em;
+  padding: 5px 9px; cursor: pointer; transition: border-color .15s, color .15s;
+  letter-spacing: .04em; text-align: left; width: 100%;
 }
-.preset-btn:hover  { border-color: var(--gold); color: var(--gold); }
-.preset-btn.active { border-color: var(--gold); color: var(--gold); }
+.preset-btn:hover { border-color: var(--gold); color: var(--gold); }
 
-/* ── Simulation layout ── */
-.sim-layout { display: flex; gap: 14px; align-items: flex-start; }
+.sb-stats {
+  margin-top: auto; padding: 8px 11px 8px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+.stat-key { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); letter-spacing: .04em; }
+.stat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); }
 
-/* ── Source panel ── */
-.source-panel {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 10px 6px; flex-shrink: 0; width: 278px;
-}
-.sp-title {
-  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .12em;
-  text-transform: uppercase; color: var(--text-dim); padding: 0 4px; margin-bottom: 6px;
-  display: flex; justify-content: space-between;
-}
-.sp-header {
-  display: grid; grid-template-columns: 34px 1fr 1fr 1fr;
-  gap: 3px; margin-bottom: 2px;
-  font-family: 'DM Mono', monospace; font-size: 10px;
-  color: var(--text-dim); letter-spacing: .08em; text-transform: uppercase;
-  padding: 0 4px;
-}
-.sp-header span { text-align: center; }
-.source-row {
-  display: grid; grid-template-columns: 34px 1fr 1fr 1fr;
-  gap: 3px; align-items: center; padding: 2px 4px;
-  border-radius: 6px;
-}
-.source-row:hover { background: var(--panel2); }
-.src-num {
-  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim);
-  text-align: right; padding-right: 5px; user-select: none; line-height: 1;
-}
-.src-ctrl { display: flex; flex-direction: column; gap: 0; }
-.src-ctrl input[type=range] { margin: 3px 0 1px; height: 2px; }
-.src-val { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); text-align: center; }
-
-/* ── Canvas area ── */
-.canvas-area { flex: 1; min-width: 0; }
-.canvas-wrap {
-  width: 100%; aspect-ratio: 16/10;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
-}
+/* ── Canvas area ─────────────────────────────────────────────────── */
+.canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); }
+.canvas-wrap { width: 100%; height: 100%; overflow: hidden; }
 canvas#field { display: block; width: 100%; height: 100%; }
 
-/* ── Stats bar ── */
-.stats-bar {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 14px 22px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
-}
-.stat { display: flex; flex-direction: column; gap: 2px; }
-.stat-label { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text-bright); letter-spacing: .06em; }
-.stat-val   { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-dim); }
-
-/* ── Responsive ── */
-@media (max-width: 920px) {
-  .header-inner { padding: 22px 20px 18px; }
-  .theme-toggle { top: 22px; right: 20px; }
-  main { padding: 18px 16px 40px; }
-  .sim-layout { flex-direction: column; }
-  .source-panel { width: 100%; }
-  .sp-header, .source-row { grid-template-columns: 34px repeat(3, 1fr); }
-  .sliders-3 { grid-template-columns: 1fr 1fr; }
-  .canvas-wrap { aspect-ratio: 16/10; }
-}
-@media (max-width: 500px) {
-  .header-title h1 { font-size: 22px; }
-  .header-title p  { font-size: 13px; }
-  .sliders-3 { grid-template-columns: 1fr; }
+/* ── Mobile ──────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  html, body { height: auto; overflow: auto; }
+  .app { flex-direction: column; }
+  .sidebar {
+    width: 100%; border-right: none; border-bottom: 1px solid var(--border);
+    overflow-y: visible;
+  }
+  .sb-stats { margin-top: 0; }
+  .canvas-area { flex: none; }
+  .canvas-wrap { height: auto; aspect-ratio: 16/10; }
 }
 </style>
 </head>
 <body>
 
+<!-- ── Liénard-Wiechert Web Worker (not executed by browser) ─────────────── -->
+<script type="text/js-worker" id="lw-worker">
+'use strict';
+var C_W   = 299792458;
+var NX_W  = 55, NY_W = 45;   // compute grid (upsampled 2× to NX_F×NY_F)
+var NX_F  = 110, NY_F = 90;  // output grid
+var XL0_W = 0.3;
+
+function upsample(src, sw, sh, dw, dh) {
+  var dst = new Float32Array(dw * dh);
+  for (var di = 0; di < dw; di++) {
+    var si_ = di / (dw - 1) * (sw - 1);
+    var i0  = Math.min(si_ | 0, sw - 2), fi = si_ - i0;
+    for (var dj = 0; dj < dh; dj++) {
+      var sj_ = dj / (dh - 1) * (sh - 1);
+      var j0  = Math.min(sj_ | 0, sh - 2), fj = sj_ - j0;
+      dst[di * dh + dj] =
+        src[ i0      * sh + j0    ] * (1 - fi) * (1 - fj) +
+        src[(i0 + 1) * sh + j0    ] *      fi  * (1 - fj) +
+        src[ i0      * sh + j0 + 1] * (1 - fi) *      fj  +
+        src[(i0 + 1) * sh + j0 + 1] *      fi  *      fj;
+    }
+  }
+  return dst;
+}
+
+self.onmessage = function(ev) {
+  var p    = ev.data;
+  var f0   = p.f0, d_m = p.d_m, N = p.N, srcs = p.srcs, t = p.t;
+  var XL1  = p.xl1 || 10, YL0 = p.yl0 || -7.5, YL1 = p.yl1 || 7.5;
+  var lam  = C_W / f0;
+
+  var xA = new Float64Array(NX_W), yA = new Float64Array(NY_W);
+  for (var i = 0; i < NX_W; i++) xA[i] = (XL0_W + (XL1 - XL0_W) * i / (NX_W - 1)) * lam;
+  for (var j = 0; j < NY_W; j++) yA[j] = (YL0  + (YL1  - YL0)   * j / (NY_W - 1)) * lam;
+
+  var Ez_w = new Float32Array(NX_W * NY_W);
+  var Bx_w = new Float32Array(NX_W * NY_W);
+  var By_w = new Float32Array(NX_W * NY_W);
+
+  for (var n = 0; n < N; n++) {
+    var amp   = srcs[n].amp, fmul = srcs[n].fmul, phase = srcs[n].phase;
+    if (amp < 1e-6) continue;
+    var omega = fmul * 2 * Math.PI * f0;
+    var z_amp = amp * 1e-4 * lam;
+    var yn    = (n - (N - 1) / 2) * d_m;
+
+    for (var i = 0; i < NX_W; i++) {
+      var x = xA[i];
+      for (var j = 0; j < NY_W; j++) {
+        var y = yA[j];
+
+        // Initial guess: retarded time assuming source near origin
+        var tr = t - Math.sqrt(x * x + (y - yn) * (y - yn)) / C_W;
+
+        // Newton iteration: solve  t - tr - |r - r_s(tr)| / c = 0
+        for (var it = 0; it < 8; it++) {
+          var sz0  = z_amp * Math.sin(omega * tr + phase);
+          var vz0  = z_amp * omega * Math.cos(omega * tr + phase);
+          var Ry0  = y - yn, Rz0 = -sz0;
+          var R0   = Math.sqrt(x * x + Ry0 * Ry0 + Rz0 * Rz0) + 1e-30;
+          var fval = t - tr - R0 / C_W;
+          var fp   = -1 + (Rz0 * vz0) / (R0 * C_W);  // df/dtr = -1 + n̂·β
+          if (Math.abs(fp) < 1e-30) break;
+          tr -= fval / fp;
+        }
+
+        // Retarded quantities at converged tr
+        var sz  = z_amp * Math.sin(omega * tr + phase);
+        var vz  = z_amp * omega * Math.cos(omega * tr + phase);
+        var az  = -z_amp * omega * omega * Math.sin(omega * tr + phase);
+        var Rx  = x, Ry = y - yn, Rz = -sz;
+        var R2  = Rx * Rx + Ry * Ry + Rz * Rz + 1e-60;
+        var R   = Math.sqrt(R2), Ri = 1 / R;
+        var nx  = Rx * Ri, ny = Ry * Ri, nz = Rz * Ri;
+        var bz  = vz / C_W, b2 = bz * bz;
+        var kap = 1 - nz * bz;
+        if (Math.abs(kap) < 1e-10) continue;
+        var k3  = kap * kap * kap;
+
+        // (n̂ - β): source only has z-velocity
+        var dnx = nx, dny = ny, dnz = nz - bz;
+
+        // ── Velocity term  (n̂-β)(1-β²) / (κ³ R²) ─────────────────────────
+        var vc = (1 - b2) / (R2 * k3);
+        var Ex = vc * dnx, Ey = vc * dny, Ez = vc * dnz;
+
+        // ── Radiation term  n̂×[(n̂-β)×a] / (c κ³ R) ──────────────────────
+        // (n̂-β)×a  where a=(0,0,az):  wx=dny·az, wy=−dnx·az, wz=0
+        // n̂×w:  x= nz·(−(−dnx·az)) = nz·dnx·az
+        //        y= nz·dny·az
+        //        z= −(nx·dnx + ny·dny)·az
+        var ac = az / (C_W * R * k3);
+        Ex += ac * nz * dnx;
+        Ey += ac * nz * dny;
+        Ez += ac * (-(nx * dnx + ny * dny));
+
+        var idx  = i * NY_W + j;
+        Ez_w[idx] += Ez;
+        // B = (n̂ × E) / c  (per source; summed over sources)
+        Bx_w[idx] += (ny * Ez - nz * Ey) / C_W;
+        By_w[idx] += (nz * Ex - nx * Ez) / C_W;
+      }
+    }
+  }
+
+  // Bilinear upsample to output resolution
+  var EzF = upsample(Ez_w, NX_W, NY_W, NX_F, NY_F);
+  var BxF = upsample(Bx_w, NX_W, NY_W, NX_F, NY_F);
+  var ByF = upsample(By_w, NX_W, NY_W, NX_F, NY_F);
+
+  var out = new Float32Array(3 * NX_F * NY_F);
+  out.set(EzF, 0);
+  out.set(BxF, NX_F * NY_F);
+  out.set(ByF, 2 * NX_F * NY_F);
+  self.postMessage(out.buffer, [out.buffer]);
+};
+</script>
+
 <header>
   <div class="header-inner">
-    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☀</button>
     <div class="header-title">
-      <h1>EM-Wellen · <em>Beugungsgitter</em></h1>
-      <p>Interaktive Simulation — N kohärente Punktquellen</p>
+      <strong>EM-Wellen</strong> · <em>Feldlinien-Darstellung</em>
     </div>
+    <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
+    <div class="load-area" id="load-area">
+      <div class="load-text" id="load-text">reloading…</div>
+      <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☾</button>
   </div>
 </header>
 
-<main>
+<div class="app">
 
-  <div>
-    <div class="section-label">Globale Parameter</div>
-    <div class="sliders sliders-3">
+  <aside class="sidebar">
+
+    <div class="sb-group">
+      <div class="sb-label">Array</div>
       <div class="slider-group" style="color:var(--gold)">
         <div class="slider-label">
           <span class="pname">f₀</span>
-          <span class="pval" id="val-f0">1.00 GHz</span>
+          <span class="pval" id="val-f0">3.00 GHz</span>
         </div>
-        <input type="range" id="sl-f0" min="1" max="100" value="10" step="1">
+        <input type="range" id="sl-f0" min="1" max="100" value="30" step="1">
       </div>
       <div class="slider-group" style="color:var(--blue)">
         <div class="slider-label">
           <span class="pname">d</span>
-          <span class="pval" id="val-d">45 cm &nbsp;·&nbsp; d/λ = 1.50</span>
+          <span class="pval" id="val-d">36 cm · d/λ = 3.60</span>
         </div>
-        <input type="range" id="sl-d" min="5" max="200" value="45" step="1">
+        <input type="range" id="sl-d" min="5" max="200" value="36" step="1">
       </div>
       <div class="slider-group" style="color:var(--blue)">
         <div class="slider-label">
           <span class="pname">N</span>
-          <span class="pval" id="val-N">10</span>
+          <span class="pval" id="val-N">2</span>
         </div>
-        <input type="range" id="sl-N" min="1" max="16" value="10" step="1">
+        <input type="range" id="sl-N" min="1" max="100" value="2" step="1">
       </div>
     </div>
-  </div>
 
-  <div class="presets">
-    <span class="presets-label">Anzeige</span>
-    <button class="preset-btn active" id="btn-field-E">E<sub>z</sub></button>
-    <button class="preset-btn"        id="btn-field-B">|B|</button>
-    <span class="presets-label" style="margin-left:8px">Presets</span>
-    <button class="preset-btn" id="btn-reset">Reset</button>
-    <button class="preset-btn" id="btn-alt">Alt. Phase</button>
-    <button class="preset-btn" id="btn-beam">Beam-Steering</button>
-    <button class="preset-btn" id="btn-rnd">Zufällige Phase</button>
-    <button class="preset-btn" id="btn-half">Hälfte aus</button>
-  </div>
-
-  <div class="sim-layout">
-    <div class="source-panel">
-      <div class="sp-title">
-        <span>Quellen</span><span>A · f× · φ</span>
+    <div class="sb-group">
+      <div class="sb-label">Quelle</div>
+      <select class="src-select" id="sel-src"></select>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">A</span>
+          <span class="pval" id="val-src-a">1.00</span>
+        </div>
+        <input type="range" id="sl-src-a" min="0" max="100" step="1" value="100">
       </div>
-      <div class="sp-header">
-        <span></span><span>A</span><span>f ×</span><span>φ / π</span>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">f ×</span>
+          <span class="pval" id="val-src-f">1.00×</span>
+        </div>
+        <input type="range" id="sl-src-f" min="50" max="200" step="25" value="100">
       </div>
-      <div id="source-rows"></div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">φ</span>
+          <span class="pval" id="val-src-p">0.00π</span>
+        </div>
+        <input type="range" id="sl-src-p" min="-200" max="200" step="25" value="0">
+      </div>
     </div>
 
-    <div class="canvas-area">
-      <div class="canvas-wrap">
-        <canvas id="field"></canvas>
-      </div>
-      <div class="slider-group" style="margin-top:8px; color:var(--text-dim)">
+    <div class="sb-group">
+      <div class="sb-label">Ansicht</div>
+      <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label">
           <span class="pname">x<sub>max</sub></span>
-          <span class="pval" id="val-xl1">11 λ</span>
+          <span class="pval" id="val-xl1">10 λ</span>
         </div>
-        <input type="range" id="sl-xl1" min="1" max="100" value="11" step="1">
+        <input type="range" id="sl-xl1" min="1" max="100" value="10" step="1">
       </div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">Schirm</span>
+          <span class="pval" id="val-scr">7.0 λ</span>
+        </div>
+        <input type="range" id="sl-scr" min="1" max="10" value="7" step="0.5">
+      </div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">Tempo</span>
+          <span class="pval" id="val-speed">0.5 T/s</span>
+        </div>
+        <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
+      </div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Anzeige</div>
+      <div class="toggle-row">
+        <label><input type="checkbox" id="chk-efield" checked> E-Feld (Ez)</label>
+        <label><input type="checkbox" id="chk-bfield" checked> B-Feldlinien</label>
+      </div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Presets</div>
+      <div class="preset-stack">
+        <button class="preset-btn" id="btn-reset">Reset</button>
+        <button class="preset-btn" id="btn-alt">Alt. Phase</button>
+        <button class="preset-btn" id="btn-beam">Beam-Steering</button>
+        <button class="preset-btn" id="btn-rnd">Zufällige Phase</button>
+        <button class="preset-btn" id="btn-half">Hälfte aus</button>
+      </div>
+    </div>
+
+    <div class="sb-stats">
+      <div class="stat-row"><span class="stat-key">λ</span><span class="stat-val" id="st-lam">—</span></div>
+      <div class="stat-row"><span class="stat-key">T</span><span class="stat-val" id="st-T">—</span></div>
+      <div class="stat-row"><span class="stat-key">k</span><span class="stat-val" id="st-k">—</span></div>
+      <div class="stat-row"><span class="stat-key">Gitterbreite</span><span class="stat-val" id="st-gw">—</span></div>
+      <div class="stat-row"><span class="stat-key">r_FF</span><span class="stat-val" id="st-rff">—</span></div>
+      <div class="stat-row"><span class="stat-key">Hauptmaxima</span><span class="stat-val" id="st-mm">—</span></div>
+      <div class="stat-row"><span class="stat-key">fps</span><span class="stat-val" id="st-fps">—</span></div>
+      <div class="stat-row"><span class="stat-key">Modus</span><span class="stat-val" id="st-mode">analytisch</span></div>
+    </div>
+
+  </aside>
+
+  <div class="canvas-area">
+    <div class="canvas-wrap">
+      <canvas id="field"></canvas>
     </div>
   </div>
 
-  <div class="stats-bar">
-    <div class="stat"><span class="stat-label">λ</span><span class="stat-val" id="st-lam">—</span></div>
-    <div class="stat"><span class="stat-label">T</span><span class="stat-val" id="st-T">—</span></div>
-    <div class="stat"><span class="stat-label">k</span><span class="stat-val" id="st-k">—</span></div>
-    <div class="stat"><span class="stat-label">Gitterbreite</span><span class="stat-val" id="st-gw">—</span></div>
-    <div class="stat"><span class="stat-label">r_FF</span><span class="stat-val" id="st-rff">—</span></div>
-    <div class="stat"><span class="stat-label">Hauptmaxima</span><span class="stat-val" id="st-mm">—</span></div>
-    <div class="stat"><span class="stat-label">Simulation</span><span class="stat-val" id="st-fps">—</span></div>
-    <div class="stat"><span class="stat-label">Modus</span><span class="stat-val" id="st-mode">analytisch</span></div>
-  </div>
-
-</main>
+</div>
 
 <script>
 'use strict';
 
-// ── Physical constant ─────────────────────────────────────────────────────────
 const C_LIGHT = 299792458;
 
-// ── RdBu colormap (negative Ez → blue, positive → red) ───────────────────────
+// ── RdBu colormap ─────────────────────────────────────────────────────────────
 const CM = [
   [5,48,97],[33,102,172],[67,147,195],[146,197,222],[247,247,247],
   [244,165,130],[214,96,77],[178,24,43],[103,0,31]
 ];
-function cmRGB(t) {  // t ∈ [-1, 1]
+function cmRGB(t) {
   const u = Math.max(0, Math.min(1, (t + 1) / 2));
   const p = u * (CM.length - 1);
   const lo = Math.min(Math.floor(p), CM.length - 2);
@@ -301,93 +480,91 @@ function cmRGB(t) {  // t ∈ [-1, 1]
   return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
 }
 
-// ── Sequential |B| colormap (black → purple → orange → yellow) ───────────────
-const CM_B = [
-  [5,5,10],[50,10,80],[130,20,50],[210,70,10],[240,160,20],[252,230,90],[255,255,220]
-];
-function cmRGB_B(t) {  // t ∈ [0, 1]  (|B| is always ≥ 0)
-  const p  = Math.max(0, Math.min(1, t)) * (CM_B.length - 1);
-  const lo = Math.min(Math.floor(p), CM_B.length - 2);
-  const f  = p - lo;
-  const a  = CM_B[lo], b = CM_B[lo + 1];
-  return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
-}
-
-// ── Field display mode ────────────────────────────────────────────────────────
-let fieldMode = 'E';  // 'E' → Ez colormap   'B' → |B| colormap + arrows
-
 // ── Grid constants ────────────────────────────────────────────────────────────
 const NX = 110, NY = 90;
 const XL0 = 0.3;
-let   XL1 = 11;   // x range in λ — controlled by sl-xl1 slider
-const YL0 = -7.5, YL1 = 7.5;    // y range in λ
+let   XL1 = 10;
+let YL0 = -7.5, YL1 = 7.5;
+let _lastYlHalf = 7.5;
 
-let rFF       = 0;     // Fraunhofer distance [λ]
-let screenLam = 10.0;  // screen/measurement position [λ]
+function makeYTicks(half, includeZero) {
+  const step = half < 4 ? 1 : half < 10 ? 2 : half < 25 ? 5 : 10;
+  const arr = [];
+  for (let v = -Math.floor(half / step) * step; v <= half - step * 0.1; v += step) {
+    if (includeZero || Math.abs(v) > step * 0.1) arr.push(v);
+  }
+  return arr;
+}
 
-// ── Mutable simulation state ──────────────────────────────────────────────────
-let N_SRC  = 10;
-let f0     = 1e9;
-let d_m    = 0.45;   // physical slit spacing [m]; d/λ is derived from f0
-let d_lam  = 1.5;    // derived: d_m * f0 / C_LIGHT
+let showEField  = true;
+let showBField  = true;
+let animSpeed   = 0.5;
 
-// 16 slots max; active = [0..N_SRC-1]
-let srcs = Array.from({length: 16}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+let rFF       = 0;
+let screenLam    = 7.0;
+let screenOverride = true;
 
-// Derived (recomputed on global param change)
+let N_SRC = 10;
+let f0    = 1e9;
+let d_m   = 0.45;
+let d_lam = 1.5;
+
+let srcs = Array.from({length: 100}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+
 let lam, k0, T_per;
 const xGrid = new Float64Array(NX);
 const yGrid = new Float64Array(NY);
-const R_mat = new Float64Array(16 * NX * NY);  // R_mat[n*NX*NY + i*NY + j]
+const R_mat = new Float64Array(100 * NX * NY);
 
-// Screen accumulator (exponential decay)
-const screenAcc = new Float64Array(NY);
+const screenAcc  = new Float64Array(NY);
 const SCREEN_DECAY = 0.05;
 
-// Animation
 let simTime = 0;
 let lastTs  = null;
-let isLight = false;
+let isLight  = true;
+let isPaused = false;
 
-// FPS tracking
 let fpsCount = 0, fpsLast = 0, fpsVal = 0;
 
-// Canvas and offscreen buffer
-const canvas   = document.getElementById('field');
-const ctx      = canvas.getContext('2d');
-const offsc    = document.createElement('canvas');
-const offCtx   = offsc.getContext('2d');
-offsc.width    = NX;
-offsc.height   = NY;
-const imgData  = offCtx.createImageData(NX, NY);
+const canvas  = document.getElementById('field');
+const ctx     = canvas.getContext('2d');
+const offsc   = document.createElement('canvas');
+const offCtx  = offsc.getContext('2d');
+offsc.width   = NX;
+offsc.height  = NY;
+const imgData = offCtx.createImageData(NX, NY);
 
-// ── Geometry recompute ────────────────────────────────────────────────────────
 function recompute() {
   lam   = C_LIGHT / f0;
   k0    = 2 * Math.PI / lam;
   T_per = 1 / f0;
-  d_lam = d_m * f0 / C_LIGHT;  // d/λ changes with frequency
+  d_lam = d_m * f0 / C_LIGHT;
 
-  // Fraunhofer distance: r_FF = 2D²/λ, D = (N-1)·d
-  // Sets plot range so the boundary sits near the midpoint (capped at 55λ for resolution).
   rFF = (N_SRC <= 1) ? 0 : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
-  // XL1 is slider-controlled; screenLam tracks r_FF within the current range.
-  screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
+  if (!screenOverride) {
+    screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
+  }
+  screenLam = Math.max(1, Math.min(XL1, screenLam));
+  const scrSl = document.getElementById('sl-scr');
+  if (scrSl) {
+    scrSl.max   = XL1;
+    scrSl.value = screenLam.toFixed(1);
+    document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  }
 
   const D = d_lam * lam;
   for (let i = 0; i < NX; i++)
     xGrid[i] = (XL0 + (XL1 - XL0) * i / (NX - 1)) * lam;
   for (let j = 0; j < NY; j++)
     yGrid[j] = (YL0 + (YL1 - YL0) * j / (NY - 1)) * lam;
-
   for (let n = 0; n < N_SRC; n++) {
-    const yn   = (n - (N_SRC - 1) / 2) * D;
+    const yn = (n - (N_SRC - 1) / 2) * D;
     const base = n * NX * NY;
     for (let i = 0; i < NX; i++) {
       const dx = xGrid[i];
       for (let j = 0; j < NY; j++) {
         const dy = yGrid[j] - yn;
-        R_mat[base + i * NY + j] = Math.sqrt(dx * dx + dy * dy);
+        R_mat[base + i * NY + j] = Math.sqrt(dx*dx + dy*dy);
       }
     }
   }
@@ -395,7 +572,6 @@ function recompute() {
   updateStats();
 }
 
-// ── Ez field computation ──────────────────────────────────────────────────────
 function computeField(t) {
   const Ez = new Float32Array(NX * NY);
   for (let n = 0; n < N_SRC; n++) {
@@ -416,7 +592,6 @@ function computeField(t) {
   return Ez;
 }
 
-// Screen column: x closest to screenLam
 function iScreen() {
   const Lm = screenLam * lam;
   let best = 0, bd = Infinity;
@@ -427,15 +602,13 @@ function iScreen() {
   return best;
 }
 
-// ── rAF render loop ───────────────────────────────────────────────────────────
 function render(ts) {
   requestAnimationFrame(render);
 
   const dt = lastTs === null ? 0 : Math.min((ts - lastTs) / 1000, 0.05);
   lastTs = ts;
-  simTime += dt * 2.5;  // 2.5 periods per real second
+  if (!isPaused) simTime += dt * animSpeed;
 
-  // FPS
   fpsCount++;
   if (ts - fpsLast > 1000) {
     fpsVal = Math.round(fpsCount * 1000 / (ts - fpsLast));
@@ -443,46 +616,21 @@ function render(ts) {
     document.getElementById('st-fps').textContent = fpsVal + ' fps';
   }
 
-  // Use LW field from server when available; fall back to analytical otherwise.
-  // wsSendParams() is driven by the ws.onmessage callback (response-pipelined).
   const Ez = (wsActive && wsLatestEz) ? wsLatestEz : computeField(simTime * T_per);
 
-  // ── Pixel fill: E mode uses RdBu(Ez), B mode uses sequential(|B|) ───────────
   const px = imgData.data;
-  const showB = fieldMode === 'B' && wsActive && wsLatestBx && wsLatestBy;
-
-  if (showB) {
-    // Compute |B| and its RMS for tanh scale
-    let s2B = 0;
-    for (let k = 0; k < NX * NY; k++) {
-      const bm = Math.sqrt(wsLatestBx[k] * wsLatestBx[k] + wsLatestBy[k] * wsLatestBy[k]);
-      s2B += bm * bm;
-    }
-    const scaleB = 1 / (Math.sqrt(s2B / (NX * NY)) * 4 + 1e-30);
-    for (let i = 0; i < NX; i++) {
-      for (let j = 0; j < NY; j++) {
-        const bm  = Math.sqrt(wsLatestBx[i*NY+j] ** 2 + wsLatestBy[i*NY+j] ** 2);
-        const rgb = cmRGB_B(Math.tanh(bm * scaleB));
-        const idx = ((NY - 1 - j) * NX + i) * 4;
-        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
-      }
-    }
-  } else {
-    // E mode (or B mode without server: fall back to Ez)
-    let s2 = 0;
-    for (let k = 0; k < Ez.length; k++) s2 += Ez[k] * Ez[k];
-    const scale = 1 / (Math.sqrt(s2 / Ez.length) * 4 + 1e-30);
-    for (let i = 0; i < NX; i++) {
-      for (let j = 0; j < NY; j++) {
-        const rgb = cmRGB(Math.tanh(Ez[i * NY + j] * scale));
-        const idx = ((NY - 1 - j) * NX + i) * 4;
-        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
-      }
+  let s2 = 0;
+  for (let k = 0; k < Ez.length; k++) s2 += Ez[k] * Ez[k];
+  const scale = 1 / (Math.sqrt(s2 / Ez.length) * 4 + 1e-30);
+  for (let i = 0; i < NX; i++) {
+    for (let j = 0; j < NY; j++) {
+      const rgb = cmRGB(Math.tanh(Ez[i*NY+j] * scale));
+      const idx = ((NY - 1 - j) * NX + i) * 4;
+      px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
     }
   }
   offCtx.putImageData(imgData, 0, 0);
 
-  // Update screen accumulator
   const is = iScreen();
   for (let j = 0; j < NY; j++) {
     const v = Ez[is * NY + j];
@@ -492,26 +640,157 @@ function render(ts) {
   draw();
 }
 
-// ── Canvas draw ───────────────────────────────────────────────────────────────
+// ── B-field streamlines ───────────────────────────────────────────────────────
+function drawStreamlines(ctx2d, Bx, By, fx0, fy0, fw, fh) {
+  const SEED_STEP = 35;
+  const STEP_PX   = 2.5;
+  const MAX_STEPS = 180;
+
+  function sampleB(cx, cy) {
+    let fi = (cx - fx0) / fw * (NX - 1);
+    let fj = (1 - (cy - fy0) / fh) * (NY - 1);
+    fi = Math.max(0, Math.min(NX - 1 - 1e-6, fi));
+    fj = Math.max(0, Math.min(NY - 1 - 1e-6, fj));
+    const i0 = fi | 0, i1 = i0 + 1;
+    const j0 = fj | 0, j1 = j0 + 1;
+    const df = fi - i0, dg = fj - j0;
+    function lerp2(arr) {
+      const v00 = arr[i0*NY+j0], v10 = arr[i1*NY+j0];
+      const v01 = arr[i0*NY+j1], v11 = arr[i1*NY+j1];
+      return (v00*(1-df) + v10*df)*(1-dg) + (v01*(1-df) + v11*df)*dg;
+    }
+    return [lerp2(Bx), lerp2(By)];
+  }
+
+  let sumB2 = 0;
+  const bmArr = new Float32Array(NX * NY);
+  for (let k = 0; k < NX * NY; k++) {
+    const bm2 = Bx[k]*Bx[k] + By[k]*By[k];
+    sumB2 += bm2;
+    bmArr[k] = Math.sqrt(bm2);
+  }
+  bmArr.sort();
+  const rmsB  = Math.sqrt(sumB2 / (NX * NY));
+  const p95B  = bmArr[Math.floor(NX * NY * 0.95)] || 1e-30;
+  const threshold = rmsB * 0.15;
+
+  function trace(cx0, cy0, sign) {
+    const pts = [[cx0, cy0]];
+    let cx = cx0, cy = cy0;
+    for (let s = 0; s < MAX_STEPS; s++) {
+      const [bx, by] = sampleB(cx, cy);
+      const bm = Math.sqrt(bx*bx + by*by);
+      if (bm < threshold * 0.4) break;
+      const ux = (bx / bm) * sign;
+      const uy = -(by / bm) * sign;
+      cx += ux * STEP_PX;
+      cy += uy * STEP_PX;
+      if (cx < fx0 || cx > fx0+fw || cy < fy0 || cy > fy0+fh) break;
+      pts.push([cx, cy]);
+    }
+    return pts;
+  }
+
+  function drawArrow(ax, ay, dx, dy) {
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len < 1e-10) return;
+    const ux = dx / len, uy = dy / len;
+    const head = 5.5, wing = 2.8;
+    ctx2d.beginPath();
+    ctx2d.moveTo(ax + ux * head,        ay + uy * head);
+    ctx2d.lineTo(ax - uy * wing - ux * head * 0.4, ay + ux * wing - uy * head * 0.4);
+    ctx2d.lineTo(ax + uy * wing - ux * head * 0.4, ay - ux * wing - uy * head * 0.4);
+    ctx2d.closePath();
+    ctx2d.fill();
+  }
+
+  const CM_SL = [
+    [210, 140,  40],
+    [230, 185,  50],
+    [255, 230,  80],
+  ];
+  function cmSL(t) {
+    const p  = Math.max(0, Math.min(1, t)) * (CM_SL.length - 1);
+    const lo = Math.min(Math.floor(p), CM_SL.length - 2);
+    const f  = p - lo;
+    const a  = CM_SL[lo], b = CM_SL[lo + 1];
+    return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
+  }
+  const scaleB = 2.0 / p95B;
+
+  ctx2d.save();
+  ctx2d.lineWidth = 1.1;
+  ctx2d.lineJoin  = 'round';
+  ctx2d.lineCap   = 'round';
+
+  for (let sy = fy0 + SEED_STEP / 2; sy < fy0 + fh; sy += SEED_STEP) {
+    for (let sx = fx0 + SEED_STEP / 2; sx < fx0 + fw; sx += SEED_STEP) {
+      const [bx0, by0] = sampleB(sx, sy);
+      const bm0 = Math.sqrt(bx0*bx0 + by0*by0);
+      if (bm0 < threshold) continue;
+
+      const t = Math.tanh(bm0 * scaleB);
+      const [r, g, b_] = cmSL(t);
+      const alpha = t * 0.85;
+      const lineColor = `rgba(${r},${g},${b_},${alpha.toFixed(2)})`;
+      ctx2d.strokeStyle = lineColor;
+      ctx2d.fillStyle   = lineColor;
+
+      const fwd = trace(sx, sy, +1);
+      const bwd = trace(sx, sy, -1);
+
+      const path = [...bwd.slice(1).reverse(), ...fwd];
+      if (path.length < 4) continue;
+
+      ctx2d.beginPath();
+      ctx2d.moveTo(path[0][0], path[0][1]);
+      for (let i = 1; i < path.length; i++)
+        ctx2d.lineTo(path[i][0], path[i][1]);
+      ctx2d.stroke();
+
+      const ai = Math.floor(fwd.length * 2 / 3);
+      if (ai >= 1 && ai < fwd.length) {
+        const [ax, ay] = fwd[ai];
+        const [px2, py2] = fwd[ai - 1];
+        drawArrow(ax, ay, ax - px2, ay - py2);
+      }
+    }
+  }
+  ctx2d.restore();
+}
+
 function draw() {
   const dpr  = window.devicePixelRatio || 1;
   const cssW = canvas.offsetWidth  || 800;
   const cssH = canvas.offsetHeight || 500;
-
-  // Resize backing store if needed
   const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
   if (canvas.width !== pw || canvas.height !== ph) {
     canvas.width = pw; canvas.height = ph;
   }
-
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const W = cssW, H = cssH;
+  const XAXIS2_H = 30;
+  const FH = H - XAXIS2_H;
   const SCREEN_W = Math.max(100, Math.round(W * 0.20));
   const FIELD_W  = W - SCREEN_W - 1;
   const xTickStep = XL1 < 14 ? 2 : XL1 < 30 ? 5 : XL1 < 60 ? 10 : 20;
 
-  // Theme colours
+  const YAXIS_W     = 54;
+  const XAXIS_TOP_H = 28;
+  const fw   = FIELD_W - YAXIS_W;
+  const fh   = FH - XAXIS_TOP_H;
+  const fx0  = YAXIS_W;
+  const fy0  = XAXIS_TOP_H;
+  const ppl  = fw / (XL1 - XL0);
+  const ylHalf = fh / (2 * ppl);
+  if (Math.abs(ylHalf - _lastYlHalf) > 0.05) {
+    _lastYlHalf = ylHalf;
+    YL0 = -ylHalf;
+    YL1 =  ylHalf;
+    recompute();
+  }
+
   const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
   const PANEL  = isLight ? '#f0f2f8' : '#13151b';
   const BORDER = isLight ? '#c8cbd8' : '#252830';
@@ -523,286 +802,205 @@ function draw() {
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
 
-  // ── 2D field ──────────────────────────────────────────────────────────────
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(offsc, 0, 0, FIELD_W, H);
+  if (showEField) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(offsc, fx0, fy0, fw, fh);
+  }
 
-  // Helper: physics λ → canvas px
-  const xPx = xl => (xl - XL0) / (XL1 - XL0) * FIELD_W;
-  const yPx = yl => (1 - (yl - YL0) / (YL1 - YL0)) * H;
+  const xPx = xl => fx0 + (xl - XL0) / (XL1 - XL0) * fw;
+  const yPx = yl => fy0 + (1 - (yl - YL0) / (YL1 - YL0)) * fh;
 
-  // Grid lines (faint)
   ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
   for (let v = xTickStep; v < XL1; v += xTickStep) {
-    const xp = xPx(v); if (xp < 0 || xp > FIELD_W) continue;
-    ctx.beginPath(); ctx.moveTo(xp, 0); ctx.lineTo(xp, H); ctx.stroke();
+    const xp = xPx(v); if (xp < fx0 || xp > fx0 + fw) continue;
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
   }
-  [-6,-4,-2,0,2,4,6].forEach(v => {
+  makeYTicks(ylHalf, true).forEach(v => {
     const yp = yPx(v);
-    ctx.beginPath(); ctx.moveTo(0, yp); ctx.lineTo(FIELD_W, yp); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 + fw, yp); ctx.stroke();
   });
 
-  // Fraunhofer boundary — shown when r_FF falls inside the visible range
   if (rFF > XL0 + 0.5 && rFF < XL1 * 0.99) {
     const xRFF = xPx(rFF);
-    ctx.beginPath(); ctx.moveTo(xRFF, 0); ctx.lineTo(xRFF, H);
+    ctx.beginPath(); ctx.moveTo(xRFF, fy0); ctx.lineTo(xRFF, fy0 + fh);
     ctx.strokeStyle = GOLD + '88'; ctx.lineWidth = 1.0;
     ctx.setLineDash([3, 6]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.font = `300 11px 'DM Mono', monospace`;
+    ctx.font = `300 14px 'DM Mono', monospace`;
     ctx.fillStyle = GOLD + 'aa';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText('r_FF', xRFF + 3, 6);
+    ctx.fillText('r_FF', xRFF + 4, fy0 + 4);
   }
 
-  // ── B field vectors (B mode only) ──────────────────────────────────────────
-  // Arrows show the in-plane direction of B on top of the |B| colormap.
-  if (fieldMode === 'B' && wsActive && wsLatestBx && wsLatestBy) {
-    const GSTEP    = 8;
-    const xStep_px = FIELD_W / NX * GSTEP;
-    const yStep_px = H        / NY * GSTEP;
-    const maxLen   = Math.min(xStep_px, yStep_px) * 0.44;
-    const headFrac = 0.28;
-
-    // Max |B| across sampled points (for normalization)
-    let Bmax = 1e-30;
-    for (let i = 0; i < NX; i += GSTEP)
-      for (let j = 0; j < NY; j += GSTEP) {
-        const bx = wsLatestBx[i * NY + j], by = wsLatestBy[i * NY + j];
-        const bm = Math.sqrt(bx * bx + by * by);
-        if (bm > Bmax) Bmax = bm;
-      }
-
-    ctx.strokeStyle = isLight ? '#c0600099' : '#ffb455aa';
-    ctx.lineWidth   = 1.1;
-
-    const offset = GSTEP >> 1;   // centre arrows in their cell
-    for (let i = offset; i < NX; i += GSTEP) {
-      for (let j = offset; j < NY; j += GSTEP) {
-        const bx = wsLatestBx[i * NY + j];
-        const by = wsLatestBy[i * NY + j];
-        const bm = Math.sqrt(bx * bx + by * by);
-        if (bm < Bmax * 0.07) continue;   // skip near-zero
-
-        const xl = XL0 + (XL1 - XL0) * i / (NX - 1);
-        const yl = YL0 + (YL1 - YL0) * j / (NY - 1);
-        const cx = xPx(xl), cy = yPx(yl);
-        if (cx < 2 || cx > FIELD_W - 2) continue;
-
-        // Arrow length: compressed power scale so weak far-field arrows remain visible
-        const len  = Math.pow(bm / Bmax, 0.45) * maxLen;
-        const ux   =  bx / bm;   // unit vector x (canvas x same as physical x)
-        const uy   = -by / bm;   // unit vector y (flip: canvas y is down)
-        const tx   = cx + ux * len * 0.5,  ty  = cy + uy * len * 0.5;   // tip
-        const rx   = cx - ux * len * 0.5,  ry  = cy - uy * len * 0.5;   // root
-        const hl   = len * headFrac;
-        const ang  = Math.atan2(uy, ux);
-
-        ctx.beginPath();
-        ctx.moveTo(rx, ry); ctx.lineTo(tx, ty);
-        ctx.lineTo(tx - hl * Math.cos(ang - Math.PI / 5), ty - hl * Math.sin(ang - Math.PI / 5));
-        ctx.moveTo(tx, ty);
-        ctx.lineTo(tx - hl * Math.cos(ang + Math.PI / 5), ty - hl * Math.sin(ang + Math.PI / 5));
-        ctx.stroke();
-      }
-    }
-
+  if (showBField && wsActive && wsLatestBx && wsLatestBy) {
+    drawStreamlines(ctx, wsLatestBx, wsLatestBy, fx0, fy0, fw, fh);
   }
 
-  // ── Field mode label (top-left of 2D field) ─────────────────────────────────
-  ctx.font = `400 12px 'DM Mono', monospace`;
+  ctx.font = `400 14px 'DM Mono', monospace`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  if (fieldMode === 'B' && wsActive && wsLatestBx) {
-    ctx.fillStyle = isLight ? '#c06000dd' : '#ffb455dd';
-    ctx.fillText('|B|', 8, 6);
-  } else {
-    ctx.fillStyle = isLight ? '#1a7fb5dd' : '#6ed0ffdd';
-    ctx.fillText('Ez', 8, 6);
-    if (fieldMode === 'B') {   // B requested but no server
-      ctx.fillStyle = isLight ? '#555e7a99' : '#8a94a899';
-      ctx.fillText('(server required)', 30, 6);
-    }
+  if (!wsLatestBx) {
+    ctx.fillStyle = isLight ? '#1a7fb5cc' : '#6ed0ffcc';
+    ctx.fillText('Ez  (wird berechnet…)', fx0 + 8, fy0 + 6);
   }
 
-  // Screen / measurement line at x = screenLam
   const xScr = xPx(screenLam);
-  ctx.beginPath(); ctx.moveTo(xScr, 0); ctx.lineTo(xScr, H);
-  ctx.strokeStyle = CYAN + 'aa'; ctx.lineWidth = 1.2;
-  ctx.setLineDash([4,5]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh);
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 7;
+  ctx.setLineDash([]); ctx.stroke();
 
-  // Source dots (at x = 0λ, which is left of the grid)
-  const D_lam = d_lam;
   for (let n = 0; n < N_SRC; n++) {
     if (srcs[n].amp < 1e-6) continue;
-    const yn = (n - (N_SRC - 1) / 2) * D_lam;
-    const xp = 7, yp = yPx(yn);
+    const yn = (n - (N_SRC - 1) / 2) * d_lam;
+    const xp = fx0 + 4, yp = yPx(yn);
     ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
     ctx.fillStyle = BG; ctx.fill();
     ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
   }
 
-  // Axis tick labels
-  ctx.font = `300 12px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS;
-
+  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   for (let v = xTickStep; v < XL1; v += xTickStep) {
     const xp = xPx(v);
-    if (xp > 12 && xp < FIELD_W - 6) ctx.fillText(v, xp, H - 2);
+    if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 - 5); ctx.stroke();
+    ctx.fillText(v, xp, fy0 - 6);
   }
-  ctx.fillText('x/λ', FIELD_W - 14, H - 2);
+  ctx.textAlign = 'right';
+  ctx.fillText('x/λ', fx0 + fw, fy0 - 6);
 
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  [-6,-4,-2,2,4,6].forEach(v => {
+  makeYTicks(ylHalf, false).forEach(v => {
     const yp = yPx(v);
-    if (yp > 8 && yp < H - 6) ctx.fillText(v, 22, yp);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 - 5, yp); ctx.stroke();
+    ctx.fillText(v, fx0 - 8, yp);
   });
   ctx.save();
-  ctx.translate(10, H / 2); ctx.rotate(-Math.PI / 2);
+  ctx.translate(fx0 / 2, fy0 + fh / 2); ctx.rotate(-Math.PI / 2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('y/λ', 0, 0);
+  ctx.font = `400 14px 'DM Mono', monospace`;
+  ctx.fillText('y / λ', 0, 0);
   ctx.restore();
 
-  // ── Divider ───────────────────────────────────────────────────────────────
-  ctx.beginPath(); ctx.moveTo(FIELD_W, 0); ctx.lineTo(FIELD_W, H);
+  ctx.beginPath(); ctx.moveTo(FIELD_W, 0); ctx.lineTo(FIELD_W, FH);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
 
-  // ── Screen intensity panel ─────────────────────────────────────────────────
-  const SX     = FIELD_W + 1;
-  const AXIS_W = 46;                      // left margin for y-axis labels+ticks
-  const CURVE_X0 = SX + AXIS_W + 1;      // x where curve starts
-  const iPW    = SCREEN_W - AXIS_W - 4;  // width of curve area
+  const SX      = FIELD_W + 1;
+  const AXIS_W  = 46;
+  const CURVE_X0 = SX + AXIS_W + 1;
+  const iPW     = SCREEN_W - AXIS_W - 4;
 
   ctx.fillStyle = PANEL;
-  ctx.fillRect(SX, 0, SCREEN_W, H);
+  ctx.fillRect(SX, 0, SCREEN_W, FH);
 
-  // ── Y-axis scale ──────────────────────────────────────────────────────────
-  // Physical y range in meters
-  const yMaxPhys = YL1 * lam;   // e.g. 7.5 * lam [m]
-  const yMinPhys = YL0 * lam;
-
-  // Pick the largest unit where |yMaxPhys| / scale >= 0.5
-  const UNITS = [
-    {label:'km', scale:1e3}, {label:'m', scale:1}, {label:'mm', scale:1e-3},
-    {label:'µm', scale:1e-6}, {label:'nm', scale:1e-9}, {label:'pm', scale:1e-12}
-  ];
-  const unit = UNITS.find(u => Math.abs(yMaxPhys) / u.scale >= 0.5) || UNITS[UNITS.length - 1];
-
-  const yMin_u = yMinPhys / unit.scale;
-  const yMax_u = yMaxPhys / unit.scale;
-
-  // Nice tick step
-  const rough  = (yMax_u - yMin_u) / 5;
-  const exp10  = Math.pow(10, Math.floor(Math.log10(Math.abs(rough))));
-  const frac   = rough / exp10;
-  const nFrac  = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
-  const tStep  = nFrac * exp10;
-
-  const firstTick = Math.ceil(yMin_u / tStep + 1e-9) * tStep;
-  const lastTick  = Math.floor(yMax_u / tStep - 1e-9) * tStep;
-
-  // Axis spine
   ctx.beginPath();
-  ctx.moveTo(SX + AXIS_W, 0); ctx.lineTo(SX + AXIS_W, H);
+  ctx.moveTo(SX + AXIS_W, fy0); ctx.lineTo(SX + AXIS_W, fy0 + fh);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
 
-  // Ticks and labels
-  ctx.font = `300 11px 'DM Mono', monospace`;
-  ctx.textAlign  = 'right';
-  ctx.textBaseline = 'middle';
-  for (let v = firstTick; v <= lastTick + tStep * 0.01; v += tStep) {
-    // Round away float drift
-    v = Math.round(v / (tStep * 1e-6)) * tStep * 1e-6;
-    const yLam = (v * unit.scale) / lam;
-    const yp   = (1 - (yLam - YL0) / (YL1 - YL0)) * H;
-    if (yp < 4 || yp > H - 4) continue;
-
-    ctx.beginPath();
-    ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
-    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
-
-    // Format tick label: drop trailing zeros
-    const dec = Math.max(0, -Math.floor(Math.log10(Math.abs(tStep))) );
-    const label = v.toFixed(Math.min(dec, 3));
-    ctx.fillStyle = AXIS;
-    ctx.fillText(label, SX + AXIS_W - 7, yp);
-  }
-
-  // Unit label at top of axis
-  ctx.font = `300 10px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText(unit.label, SX + AXIS_W / 2, 3);
-
-  // Horizontal grid lines at tick positions
+  const scrYpx = v => fy0 + (1 - (v - YL0) / (YL1 - YL0)) * fh;
+  ctx.font = `300 13px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
-  for (let v = firstTick; v <= lastTick + tStep * 0.01; v += tStep) {
-    v = Math.round(v / (tStep * 1e-6)) * tStep * 1e-6;
-    const yLam = (v * unit.scale) / lam;
-    const yp   = (1 - (yLam - YL0) / (YL1 - YL0)) * H;
-    if (yp < 2 || yp > H - 2) continue;
-    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + SCREEN_W, yp); ctx.stroke();
-  }
-
-  // Vertical grid lines (intensity fractions)
+  makeYTicks(ylHalf, true).forEach(v => {
+    const yp = scrYpx(v);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillText(v, SX + AXIS_W - 7, yp);
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + SCREEN_W, yp);
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
+  });
+  ctx.font = `300 12px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('y/λ', SX + AXIS_W / 2, fy0);
   [0.25, 0.5, 0.75, 1.0].forEach(f => {
     const xp = CURVE_X0 + f * iPW;
-    ctx.beginPath(); ctx.moveTo(xp, 0); ctx.lineTo(xp, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
   });
 
-  // ── Accumulated screen intensity curve ────────────────────────────────────
   const Imax = Math.max(...screenAcc, 1e-30);
   ctx.beginPath();
   for (let j = 0; j < NY; j++) {
     const xp = CURVE_X0 + (screenAcc[j] / Imax) * iPW;
-    const yp = (1 - j / (NY - 1)) * H;
+    const yp = fy0 + (1 - j / (NY - 1)) * fh;
     j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
   }
   ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
 
-  // ── Analytical far-field overlay (phasor sum — valid for any A, φ) ──────────
-  // Condition: all sources share the same frequency (fmul ≈ 1); A and φ can vary.
   const allSameFreq = Array.from({length: N_SRC}, (_, n) => n)
     .every(n => Math.abs(srcs[n].fmul - 1.0) < 0.01);
   if (allSameFreq && N_SRC > 1) {
-    // Find peak amplitude for normalization (scan all j)
     let I_peak = 0;
     const I_buf = new Float32Array(NY);
     for (let j = 0; j < NY; j++) {
-      const yLam  = YL0 + (YL1 - YL0) * j / (NY - 1);
-      const sinTh = yLam / Math.sqrt(screenLam * screenLam + yLam * yLam);
-      // Phase advance per unit source index relative to centre: k*d*sinθ
-      const kd_sin = 2 * Math.PI * d_lam * sinTh;
+      const yLam = YL0 + (YL1 - YL0) * j / (NY - 1);
       let re = 0, im = 0;
       for (let n = 0; n < N_SRC; n++) {
-        const ph = kd_sin * (n - (N_SRC - 1) / 2) + srcs[n].phase;
-        re += srcs[n].amp * Math.cos(ph);
-        im += srcs[n].amp * Math.sin(ph);
+        if (srcs[n].amp < 1e-6) continue;
+        const yn   = (n - (N_SRC - 1) / 2) * d_lam;
+        const r_n  = Math.sqrt(screenLam*screenLam + (yLam - yn)*(yLam - yn));
+        const ph   = 2 * Math.PI * srcs[n].fmul * r_n - srcs[n].phase;
+        re += srcs[n].amp / r_n * Math.cos(ph);
+        im += srcs[n].amp / r_n * Math.sin(ph);
       }
-      I_buf[j] = re * re + im * im;
+      I_buf[j] = re*re + im*im;
       if (I_buf[j] > I_peak) I_peak = I_buf[j];
     }
     if (I_peak > 0) {
       ctx.beginPath();
       for (let j = 0; j < NY; j++) {
         const xp = CURVE_X0 + (I_buf[j] / I_peak) * iPW;
-        const yp = (1 - j / (NY - 1)) * H;
+        const yp = fy0 + (1 - j / (NY - 1)) * fh;
         j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
       }
       ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2;
-      ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.setLineDash([3,4]); ctx.stroke(); ctx.setLineDash([]);
     }
   }
 
-  // Panel header labels
   const midX = SX + AXIS_W + (SCREEN_W - AXIS_W) / 2;
-  ctx.font = `300 11px 'DM Mono', monospace`;
+  ctx.font = `300 13px 'DM Mono', monospace`;
   ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText('I (y)', midX, 4);
-  ctx.fillText('x = ' + screenLam.toFixed(1) + 'λ', midX, 17);
-  ctx.fillStyle = GOLD + 'bb'; ctx.fillText('— anal.', midX, 30);
+  ctx.fillText('I (y)', midX, fy0 + 4);
+  ctx.fillText('x = ' + screenLam.toFixed(1) + 'λ', midX, fy0 + 18);
+  ctx.fillStyle = GOLD + 'bb'; ctx.fillText('— anal.', midX, fy0 + 32);
+
+  ctx.beginPath(); ctx.moveTo(0, FH); ctx.lineTo(FIELD_W, FH);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.6; ctx.stroke();
+
+  const X2_UNITS = [
+    {label:'km', scale:1e3},{label:'m',  scale:1},  {label:'mm', scale:1e-3},
+    {label:'µm', scale:1e-6},{label:'nm', scale:1e-9},{label:'pm', scale:1e-12}
+  ];
+  const x2MaxPhys = XL1 * lam;
+  const x2u = X2_UNITS.find(u => x2MaxPhys / u.scale >= 0.5) || X2_UNITS[X2_UNITS.length - 1];
+  const x2Min = XL0 * lam / x2u.scale;
+  const x2Max = XL1 * lam / x2u.scale;
+  const x2Rough = (x2Max - x2Min) / 5;
+  const x2Exp   = Math.pow(10, Math.floor(Math.log10(x2Rough)));
+  const x2Frac  = x2Rough / x2Exp;
+  const x2NFrac = x2Frac < 1.5 ? 1 : x2Frac < 3.5 ? 2 : x2Frac < 7.5 ? 5 : 10;
+  const x2Step  = x2NFrac * x2Exp;
+  const x2First = Math.ceil(x2Min  / x2Step + 1e-9) * x2Step;
+  const x2Last  = Math.floor(x2Max / x2Step - 1e-9) * x2Step;
+  const x2Dec   = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(x2Step)))), 4);
+
+  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let v = x2First; v <= x2Last + x2Step * 0.01; v += x2Step) {
+    v = Math.round(v / (x2Step * 1e-6)) * x2Step * 1e-6;
+    const xLam = (v * x2u.scale) / lam;
+    const xp   = xPx(xLam);
+    if (xp < fx0 + 6 || xp > fx0 + fw - 6) continue;
+    ctx.beginPath(); ctx.moveTo(xp, FH); ctx.lineTo(xp, FH + 4);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillText(v.toFixed(x2Dec), xp, FH + 5);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillText(x2u.label, fx0 + fw, FH + 5);
 }
 
-// ── Stats bar ─────────────────────────────────────────────────────────────────
 function updateStats() {
   if (!lam) return;
   document.getElementById('st-lam').textContent = (lam * 100).toFixed(2) + ' cm';
@@ -811,212 +1009,173 @@ function updateStats() {
   document.getElementById('st-gw').textContent  = ((N_SRC - 1) * d_lam).toFixed(2) + ' λ';
   const mm = [-1, 0, 1].filter(m => Math.abs(m / d_lam) < 1)
     .map(m => `m=${m}: ${(10 * m / d_lam).toFixed(2)}λ`).join('  ');
-  document.getElementById('st-mm').textContent  = mm || 'd/λ > 1, m=±1 outside';
+  document.getElementById('st-mm').textContent = mm || 'd/λ > 1, m=±1 outside';
   const rFFtext = N_SRC <= 1 ? '—'
     : rFF > XL1 ? '> ' + XL1.toFixed(0) + ' λ'
     : rFF.toFixed(1) + ' λ';
   document.getElementById('st-rff').textContent = rFFtext;
 }
 
-// ── Source panel builder ──────────────────────────────────────────────────────
-const rowsEl = document.getElementById('source-rows');
-let slA = [], slF = [], slP = [];
-let vlA = [], vlF = [], vlP = [];
+const selSrc = document.getElementById('sel-src');
+const slSrcA = document.getElementById('sl-src-a');
+const slSrcF = document.getElementById('sl-src-f');
+const slSrcP = document.getElementById('sl-src-p');
+const vlSrcA = document.getElementById('val-src-a');
+const vlSrcF = document.getElementById('val-src-f');
+const vlSrcP = document.getElementById('val-src-p');
+let selectedSrc = 0;
 
 function buildRows() {
-  rowsEl.innerHTML = '';
-  slA = []; slF = []; slP = [];
-  vlA = []; vlF = []; vlP = [];
-
-  for (let nn = N_SRC - 1; nn >= 0; nn--) {
-    const n   = nn;
-    const row = document.createElement('div');
-    row.className = 'source-row';
-
-    const lbl = document.createElement('div');
-    lbl.className = 'src-num';
-    lbl.textContent = n + 1;
-
-    function mkCell(min, max, step, init, fmt) {
-      const c  = document.createElement('div'); c.className = 'src-ctrl';
-      const sl = document.createElement('input'); sl.type = 'range';
-      sl.min = min; sl.max = max; sl.step = step; sl.value = init;
-      const vl = document.createElement('div'); vl.className = 'src-val';
-      vl.textContent = fmt(init);
-      c.append(sl, vl);
-      return {c, sl, vl};
-    }
-
-    const aI = Math.round(srcs[n].amp   * 100);
-    const fI = Math.round(srcs[n].fmul  * 100);
-    const pI = Math.round((srcs[n].phase / Math.PI) * 100);
-
-    const ca = mkCell(0,   100, 1,  aI, v => (v/100).toFixed(2));
-    const cf = mkCell(50,  200, 25, fI, v => (v/100).toFixed(2)+'×');
-    const cp = mkCell(-200,200, 25, pI, v => (v/100).toFixed(2)+'π');
-
-    ca.sl.addEventListener('input', () => {
-      srcs[n].amp = ca.sl.value / 100;
-      ca.vl.textContent = (ca.sl.value / 100).toFixed(2);
-      screenAcc.fill(0);
-    });
-    cf.sl.addEventListener('input', () => {
-      srcs[n].fmul = cf.sl.value / 100;
-      cf.vl.textContent = (cf.sl.value / 100).toFixed(2) + '×';
-      screenAcc.fill(0);
-    });
-    cp.sl.addEventListener('input', () => {
-      srcs[n].phase = (cp.sl.value / 100) * Math.PI;
-      cp.vl.textContent = (cp.sl.value / 100).toFixed(2) + 'π';
-      screenAcc.fill(0);
-    });
-
-    slA[n] = ca.sl; vlA[n] = ca.vl;
-    slF[n] = cf.sl; vlF[n] = cf.vl;
-    slP[n] = cp.sl; vlP[n] = cp.vl;
-
-    row.append(lbl, ca.c, cf.c, cp.c);
-    rowsEl.appendChild(row);
+  selSrc.innerHTML = '';
+  for (let n = 0; n < N_SRC; n++) {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = 'Quelle ' + (n + 1);
+    selSrc.appendChild(opt);
   }
+  selectedSrc = Math.min(selectedSrc, N_SRC - 1);
+  selSrc.value = selectedSrc;
+  syncRows();
 }
 
 function syncRows() {
-  for (let n = 0; n < N_SRC; n++) {
-    slA[n].value = Math.round(srcs[n].amp   * 100);
-    slF[n].value = Math.round(srcs[n].fmul  * 100);
-    slP[n].value = Math.round((srcs[n].phase / Math.PI) * 100);
-    vlA[n].textContent = srcs[n].amp.toFixed(2);
-    vlF[n].textContent = srcs[n].fmul.toFixed(2) + '×';
-    vlP[n].textContent = (srcs[n].phase / Math.PI).toFixed(2) + 'π';
-  }
+  const s = srcs[selectedSrc];
+  slSrcA.value = Math.round(s.amp * 100);
+  slSrcF.value = Math.round(s.fmul * 100);
+  slSrcP.value = Math.round((s.phase / Math.PI) * 100);
+  vlSrcA.textContent = s.amp.toFixed(2);
+  vlSrcF.textContent = s.fmul.toFixed(2) + '×';
+  vlSrcP.textContent = (s.phase / Math.PI).toFixed(2) + 'π';
   screenAcc.fill(0);
 }
 
-// ── Global slider wiring ──────────────────────────────────────────────────────
+selSrc.addEventListener('change', () => { selectedSrc = Number(selSrc.value); syncRows(); });
+slSrcA.addEventListener('input', () => { srcs[selectedSrc].amp   = slSrcA.value / 100; vlSrcA.textContent = (slSrcA.value / 100).toFixed(2);                  screenAcc.fill(0); });
+slSrcF.addEventListener('input', () => { srcs[selectedSrc].fmul  = slSrcF.value / 100; vlSrcF.textContent = (slSrcF.value / 100).toFixed(2) + '×';            screenAcc.fill(0); });
+slSrcP.addEventListener('input', () => { srcs[selectedSrc].phase = (slSrcP.value / 100) * Math.PI; vlSrcP.textContent = (slSrcP.value / 100).toFixed(2) + 'π'; screenAcc.fill(0); });
+
 function readGlobals() {
   f0  = Number(document.getElementById('sl-f0').value) * 1e8;
-  d_m = Number(document.getElementById('sl-d').value) / 100;   // cm → m
+  d_m = Number(document.getElementById('sl-d').value) / 100;
   const newN = Number(document.getElementById('sl-N').value);
-  // d_lam is set inside recompute(); read it after
+  if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
   recompute();
   const dCm = (d_m * 100).toFixed(0);
   const lamStr = lam >= 1 ? lam.toFixed(2) + ' m' : (lam * 100).toFixed(1) + ' cm';
   document.getElementById('val-f0').textContent = (f0/1e9).toFixed(2) + ' GHz · λ = ' + lamStr;
-  document.getElementById('val-d').textContent  = dCm + ' cm · d/λ = ' + d_lam.toFixed(2);
+  document.getElementById('val-d').textContent  = dCm + ' cm · d/λ = ' + d_lam.toFixed(2);
   document.getElementById('val-N').textContent  = newN;
-  if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
 }
-
 ['sl-f0','sl-d','sl-N'].forEach(id =>
   document.getElementById(id).addEventListener('input', readGlobals)
 );
 
-// ── Presets ───────────────────────────────────────────────────────────────────
-function preset(fn) {
-  for (let n = 0; n < N_SRC; n++) fn(n);
-  syncRows();
-}
-document.getElementById('btn-reset').addEventListener('click', () =>
-  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; }));
-document.getElementById('btn-alt').addEventListener('click', () =>
-  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }));
-document.getElementById('btn-beam').addEventListener('click', () =>
-  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }));
-document.getElementById('btn-rnd').addEventListener('click', () =>
-  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }));
-document.getElementById('btn-half').addEventListener('click', () =>
-  preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }));
+function preset(fn) { for (let n = 0; n < N_SRC; n++) fn(n); syncRows(); }
+document.getElementById('btn-reset').addEventListener('click', () => { screenOverride = false; preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; }); });
+document.getElementById('btn-alt').addEventListener('click',   () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }));
+document.getElementById('btn-beam').addEventListener('click',  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }));
+document.getElementById('btn-rnd').addEventListener('click',   () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }));
+document.getElementById('btn-half').addEventListener('click',  () => preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }));
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
-document.getElementById('theme-toggle').addEventListener('click', () => {
-  isLight = !isLight;
-  document.body.classList.toggle('light', isLight);
-  document.getElementById('theme-toggle').textContent = isLight ? '☾' : '☀';
-});
-
-// ── x-range slider ───────────────────────────────────────────────────────────
 document.getElementById('sl-xl1').addEventListener('input', () => {
   XL1 = Number(document.getElementById('sl-xl1').value);
   document.getElementById('val-xl1').textContent = XL1 + ' λ';
   recompute();
 });
 
-// ── Field mode toggle ─────────────────────────────────────────────────────────
-['E', 'B'].forEach(mode => {
-  document.getElementById('btn-field-' + mode).addEventListener('click', () => {
-    fieldMode = mode;
-    document.getElementById('btn-field-E').classList.toggle('active', mode === 'E');
-    document.getElementById('btn-field-B').classList.toggle('active', mode === 'B');
-  });
+document.getElementById('sl-scr').addEventListener('input', () => {
+  screenOverride = true;
+  screenLam = Number(document.getElementById('sl-scr').value);
+  document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  screenAcc.fill(0);
 });
 
-// ── WebSocket / pycharge backend ──────────────────────────────────────────────
-// The server (server.py) computes the full Liénard-Wiechert field and streams
-// back a raw Float32Array of length NX*NY in Ez[i*NY+j] row-major order.
-// While the server is unreachable the app falls back to computeField() silently.
+document.getElementById('chk-efield').addEventListener('change', e => { showEField = e.target.checked; });
+document.getElementById('chk-bfield').addEventListener('change', e => { showBField = e.target.checked; });
 
-let wsConn     = null;   // active WebSocket
-let wsActive   = false;  // connected and ready
-let wsPending  = false;  // request in flight
-let wsLatestEz = null;   // last received Ez field  (Float32Array, NX*NY)
-let wsLatestBx = null;   // last received Bx field  (Float32Array, NX*NY)
-let wsLatestBy = null;   // last received By field  (Float32Array, NX*NY)
-const WS_URL   = 'ws://127.0.0.1:8765/ws';
+document.getElementById('sl-speed').addEventListener('input', () => {
+  animSpeed = Number(document.getElementById('sl-speed').value) * 0.1;
+  document.getElementById('val-speed').textContent = animSpeed.toFixed(1) + ' T/s';
+  syncLoadBarSpeed();
+});
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  isPaused = !isPaused;
+  document.getElementById('btn-play').textContent = isPaused ? '▶' : '⏸';
+  if (!isPaused) wsSendParams();
+});
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  isLight = !isLight;
+  document.body.classList.toggle('light', isLight);
+  document.getElementById('theme-toggle').textContent = isLight ? '☾' : '☀';
+});
+
+// ── Web Worker (inline Liénard-Wiechert solver) ───────────────────────────────
+let wsActive = false, wsPending = false;
+let wsLatestEz = null, wsLatestBx = null, wsLatestBy = null;
+let _worker = null;
+
+const _loadArea  = document.getElementById('load-area');
+const _loadBarEl = document.getElementById('load-bar');
+let   _lastParamKey = null;
+
+function setLoading(on, reloading) {
+  _loadArea.classList.toggle('active', on);
+  _loadArea.classList.toggle('reloading', on && !!reloading);
+}
+function completeLoading() { setLoading(false); }
+
+function syncLoadBarSpeed() {
+  _loadBarEl.style.animationDuration = (1 / animSpeed).toFixed(3) + 's';
+}
+
+function _paramKey() {
+  return f0 + '|' + d_m + '|' + N_SRC + '|' +
+    srcs.slice(0, N_SRC).map(s =>
+      s.amp.toFixed(4) + ',' + s.fmul.toFixed(4) + ',' + s.phase.toFixed(4)
+    ).join(';') + '|' + XL1 + '|' + YL0.toFixed(2) + '|' + YL1.toFixed(2);
+}
 
 function wsSendParams() {
-  if (!wsActive || wsPending || !wsConn) return;
+  if (!wsActive || wsPending || !_worker) return;
+  const key = _paramKey();
+  const paramsChanged = key !== _lastParamKey;
+  _lastParamKey = key;
   wsPending = true;
-  wsConn.send(JSON.stringify({
-    f0:   f0,
-    d_m:  d_m,
-    N:    N_SRC,
-    srcs: srcs.slice(0, N_SRC).map(s => ({ amp: s.amp, fmul: s.fmul, phase: s.phase })),
-    t:    simTime * T_per,
-    xl1:  XL1
-  }));
+  setLoading(true, paramsChanged);
+  _worker.postMessage({
+    f0: f0, d_m: d_m, N: N_SRC,
+    srcs: srcs.slice(0, N_SRC).map(s => ({amp:s.amp, fmul:s.fmul, phase:s.phase})),
+    t: simTime * T_per,
+    xl1: XL1, yl0: YL0, yl1: YL1
+  });
 }
 
-function wsConnect() {
-  try {
-    const sock = new WebSocket(WS_URL);
-    sock.binaryType = 'arraybuffer';
-
-    sock.onopen = () => {
-      wsConn = sock; wsActive = true;
-      document.getElementById('st-mode').textContent = 'LW';
-      wsSendParams();
-    };
-
-    sock.onmessage = ev => {
-      if (ev.data instanceof ArrayBuffer) {
-        const n = NX * NY;
-        const all = new Float32Array(ev.data);
-        wsLatestEz = all.subarray(0,     n);
-        wsLatestBx = all.subarray(n,   2*n);
-        wsLatestBy = all.subarray(2*n, 3*n);
-      }
-      wsPending = false;
-      wsSendParams();   // immediately pipeline the next frame
-    };
-
-    sock.onclose = () => {
-      wsActive = false; wsPending = false; wsConn = null;
-      wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
-      document.getElementById('st-mode').textContent = 'analytisch';
-      setTimeout(wsConnect, 3000);  // retry after 3 s
-    };
-
-    sock.onerror = () => sock.close();
-  } catch (e) {
-    setTimeout(wsConnect, 3000);
-  }
+function workerInit() {
+  const code = document.getElementById('lw-worker').textContent;
+  const blob = new Blob([code], {type: 'application/javascript'});
+  _worker = new Worker(URL.createObjectURL(blob));
+  _worker.onmessage = ev => {
+    const n = NX * NY, all = new Float32Array(ev.data);
+    wsLatestEz = all.subarray(0, n);
+    wsLatestBx = all.subarray(n, 2 * n);
+    wsLatestBy = all.subarray(2 * n, 3 * n);
+    wsPending = false;
+    completeLoading();
+    if (!isPaused) wsSendParams();
+  };
+  _worker.onerror = err => {
+    console.error('LW worker error:', err);
+    wsPending = false; completeLoading();
+  };
+  wsActive = true;
+  document.getElementById('st-mode').textContent = 'LW (lokal)';
+  wsSendParams();
 }
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-buildRows();
-readGlobals();
-wsConnect();
-requestAnimationFrame(render);
+document.body.classList.add('light');
+buildRows(); readGlobals(); syncLoadBarSpeed(); workerInit(); requestAnimationFrame(render);
 </script>
 </body>
 </html>
