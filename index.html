@@ -1440,15 +1440,25 @@ function draw() {
 
 function updateStats() {
   if (!lam) return;
-  document.getElementById('st-lam').textContent = (lam * 100).toFixed(2) + ' cm';
-  document.getElementById('st-T').textContent   = (T_per * 1e9).toFixed(2) + ' ns';
-  document.getElementById('st-f0').textContent  = (f0 / 1e9).toFixed(2) + ' GHz';
+  const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
+  const FREQ_U = [{l:'THz',s:1e12},{l:'GHz',s:1e9},{l:'MHz',s:1e6},{l:'kHz',s:1e3},{l:'Hz',s:1}];
+  const TIME_U = [{l:'s',s:1},{l:'ms',s:1e-3},{l:'µs',s:1e-6},{l:'ns',s:1e-9},{l:'ps',s:1e-12},{l:'fs',s:1e-15}];
+  const pick = (arr, val) => arr.find(u => val / u.s >= 0.5) || arr[arr.length - 1];
+
+  const uLam = pick(DIST_U, lam);
+  document.getElementById('st-lam').textContent = (lam / uLam.s).toFixed(2) + ' ' + uLam.l;
+
+  const uT = pick(TIME_U, T_per);
+  document.getElementById('st-T').textContent = (T_per / uT.s).toFixed(2) + ' ' + uT.l;
+
+  const uF = pick(FREQ_U, f0);
+  document.getElementById('st-f0').textContent = (f0 / uF.s).toFixed(2) + ' ' + uF.l;
+
   let rFFtext = '—';
   if (!isNaN(rFF) && rFF > 0) {
     const rFFm = rFF * lam;
-    const UNITS = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6}];
-    const u = UNITS.find(u => rFFm / u.s >= 0.5) || UNITS[UNITS.length - 1];
-    rFFtext = (rFFm / u.s).toFixed(2) + ' ' + u.l;
+    const uR = pick(DIST_U, rFFm);
+    rFFtext = (rFFm / uR.s).toFixed(2) + ' ' + uR.l;
   }
   document.getElementById('st-rff').textContent = rFFtext;
 }
