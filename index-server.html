@@ -288,6 +288,13 @@ canvas#field { display: block; width: 100%; height: 100%; }
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label">
+          <span class="pname">y<sub>max</sub></span>
+          <span class="pval" id="val-yl">7.5 λ</span>
+        </div>
+        <input type="range" id="sl-yl" min="0.5" max="30" value="7.5" step="0.5">
+      </div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
           <span class="pname">Schirm</span>
           <span class="pval" id="val-scr">7.0 λ</span>
         </div>
@@ -364,9 +371,10 @@ function cmRGB(t) {
 // ── Grid constants ────────────────────────────────────────────────────────────
 const NX = 110, NY = 90;
 const XL0 = 0.3;
-let   XL1 = 10;   // controlled by sl-xl1 slider
-let YL0 = -7.5, YL1 = 7.5;
-let _lastYlHalf = 7.5;
+let   XL1 = 10;
+let   ylHalf = 7.5;
+let YL0 = -ylHalf, YL1 = ylHalf;
+let xPhysMax = null, yPhysHalf = null;  // physical extents in metres; null until init
 
 // Compute y-axis ticks for a given half-range.
 function makeYTicks(half, includeZero) {
@@ -415,6 +423,43 @@ const offCtx  = offsc.getContext('2d');
 offsc.width   = NX;
 offsc.height  = NY;
 const imgData = offCtx.createImageData(NX, NY);
+
+// cached layout from last draw() call — used by drag handler
+let _layoutFx0 = 54, _layoutFw = 600, _layoutFy0 = 28, _layoutFh = 400;
+
+let _screenDragging = false;
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+  if (Math.abs(mx - xScr) < 10) {
+    _screenDragging = true;
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+  if (_screenDragging) {
+    const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
+    screenLam = Math.max(1, Math.min(XL1, newLam));
+    screenOverride = true;
+    const scrSl = document.getElementById('sl-scr');
+    if (scrSl) {
+      scrSl.value = screenLam.toFixed(1);
+      document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+    }
+    screenAcc.fill(0);
+  } else {
+    canvas.style.cursor = Math.abs(mx - xScr) < 10 ? 'ew-resize' : '';
+  }
+});
+
+canvas.addEventListener('mouseup', () => { _screenDragging = false; });
+canvas.addEventListener('mouseleave', () => { _screenDragging = false; });
 
 function recompute() {
   lam   = C_LIGHT / f0;
@@ -682,14 +727,7 @@ function draw() {
   const fh   = FH - XAXIS_TOP_H;
   const fx0  = YAXIS_W;
   const fy0  = XAXIS_TOP_H;
-  const ppl  = fw / (XL1 - XL0);
-  const ylHalf = fh / (2 * ppl);
-  if (Math.abs(ylHalf - _lastYlHalf) > 0.05) {
-    _lastYlHalf = ylHalf;
-    YL0 = -ylHalf;
-    YL1 =  ylHalf;
-    recompute();
-  }
+  _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
 
   const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
   const PANEL  = isLight ? '#f0f2f8' : '#13151b';
@@ -750,7 +788,7 @@ function draw() {
   // Screen / measurement line
   const xScr = xPx(screenLam);
   ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh);
-  ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 7;
+  ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 7;
   ctx.setLineDash([]); ctx.stroke();
 
   // Source dots
@@ -970,7 +1008,31 @@ function readGlobals() {
   d_m = Number(document.getElementById('sl-d').value) / 100;
   const newN = Number(document.getElementById('sl-N').value);
   if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
+
+  // Keep physical extents fixed when f (and thus λ) changes
+  const newLam = C_LIGHT / f0;
+  if (xPhysMax !== null) {
+    XL1 = xPhysMax / newLam;
+    const s = document.getElementById('sl-xl1');
+    s.max = Math.max(Number(s.max), Math.ceil(XL1) + 5);
+    s.value = XL1.toFixed(2);
+    document.getElementById('val-xl1').textContent = XL1.toFixed(1) + ' λ';
+  }
+  if (yPhysHalf !== null) {
+    ylHalf = yPhysHalf / newLam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    const s = document.getElementById('sl-yl');
+    s.max = Math.max(Number(s.max), Math.ceil(ylHalf) + 2);
+    s.value = ylHalf.toFixed(2);
+    document.getElementById('val-yl').textContent = ylHalf.toFixed(1) + ' λ';
+  }
+
   recompute();
+
+  // Initialise physical refs on first call (lam is now set by recompute)
+  if (xPhysMax  === null) xPhysMax  = XL1    * lam;
+  if (yPhysHalf === null) yPhysHalf = ylHalf * lam;
+
   const dCm = (d_m * 100).toFixed(0);
   const lamStr = lam >= 1 ? lam.toFixed(2) + ' m' : (lam * 100).toFixed(1) + ' cm';
   document.getElementById('val-f0').textContent = (f0/1e9).toFixed(2) + ' GHz · λ = ' + lamStr;
@@ -991,7 +1053,17 @@ document.getElementById('btn-half').addEventListener('click',  () => preset(n =>
 // ── x-range slider ───────────────────────────────────────────────────────────
 document.getElementById('sl-xl1').addEventListener('input', () => {
   XL1 = Number(document.getElementById('sl-xl1').value);
-  document.getElementById('val-xl1').textContent = XL1 + ' λ';
+  xPhysMax = XL1 * lam;   // re-anchor physical ref to new λ choice
+  document.getElementById('val-xl1').textContent = XL1.toFixed(1) + ' λ';
+  recompute();
+});
+
+// ── y-range slider ───────────────────────────────────────────────────────────
+document.getElementById('sl-yl').addEventListener('input', () => {
+  ylHalf = Number(document.getElementById('sl-yl').value);
+  yPhysHalf = ylHalf * lam;   // re-anchor physical ref
+  YL0 = -ylHalf; YL1 = ylHalf;
+  document.getElementById('val-yl').textContent = ylHalf.toFixed(1) + ' λ';
   recompute();
 });
 
