@@ -133,6 +133,7 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 
 .slider-group { margin-bottom: 7px; }
 .slider-group:last-child { margin-bottom: 0; }
+.slider-group.disabled { opacity: 0.35; pointer-events: none; }
 .slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
 .slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
 .slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
@@ -178,14 +179,33 @@ select.src-select:focus { border-color: var(--text-dim); }
 }
 .preset-btn:hover { border-color: var(--gold); color: var(--gold); }
 
-.sb-stats {
-  margin-top: auto; padding: 8px 11px 8px;
-  border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 4px;
+.unit-btn {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
+  padding: 1px 3px; cursor: pointer; transition: border-color .15s, color .15s;
+  vertical-align: middle; line-height: 1.4; outline: none;
+  -webkit-appearance: none; appearance: none;
 }
-.stat-row { display: flex; justify-content: space-between; align-items: baseline; }
-.stat-key { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); letter-spacing: .04em; }
-.stat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); }
+.unit-btn:hover { border-color: var(--text-dim); color: var(--text-bright); }
+.unit-btn option { background: var(--panel); }
+
+/* ── Bottom parameter bar ────────────────────────────────────────── */
+.bottom-bar {
+  flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: row; flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 6px 16px;
+  align-items: center;
+}
+.bottom-presets { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.preset-drop { width: 100%; }
+.bottom-params { display: flex; flex-direction: row; gap: 20px 32px; }
+.bparam-col { display: flex; flex-direction: column; gap: 3px; }
+.bstat { display: flex; align-items: baseline; gap: 7px; }
+.bstat-key { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .04em; color: var(--text-dim); }
+.bstat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); white-space: nowrap; }
 
 /* ── Canvas area ─────────────────────────────────────────────────── */
 .canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); }
@@ -372,27 +392,45 @@ self.onmessage = function(ev) {
   <aside class="sidebar">
 
     <div class="sb-group">
-      <div class="sb-label">Array</div>
+      <div class="sb-label">Quellen</div>
+      <select class="src-select" id="sel-mode" style="margin-bottom:8px;width:100%">
+        <option value="punkt">Punkt Quellen</option>
+        <option value="dipol">Dipolantenne</option>
+      </select>
+      <div id="sg-punkt">
+        <div class="slider-group" id="sg-N" style="color:var(--blue)">
+          <div class="slider-label">
+            <span class="pname">Anzahl (N)</span>
+            <span class="pval" id="val-N">2</span>
+          </div>
+          <input type="range" id="sl-N" min="1" max="100" value="2" step="1">
+        </div>
+        <div class="slider-group" id="sg-d" style="color:var(--blue)">
+          <div class="slider-label">
+            <span class="pname">Abstand (d) <select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
+            <span class="pval" id="val-d">360 mm · d/λ = 3.60</span>
+          </div>
+          <input type="range" id="sl-d" min="1" max="1000" value="360" step="1">
+        </div>
+      </div>
+      <div id="sg-dipole" style="display:none">
+        <div class="toggle-row" style="margin-bottom:6px">
+          <label><input type="checkbox" id="chk-infinite" checked> unendlich</label>
+        </div>
+        <div class="slider-group" id="sg-L" style="color:var(--blue)">
+          <div class="slider-label">
+            <span class="pname">L/λ</span>
+            <span class="pval" id="val-L">0.50</span>
+          </div>
+          <input type="range" id="sl-L" min="0.125" max="100" step="0.125" value="0.5">
+        </div>
+      </div>
       <div class="slider-group" style="color:var(--gold)">
         <div class="slider-label">
-          <span class="pname">f₀</span>
-          <span class="pval" id="val-f0">3.00 GHz</span>
+          <span class="pname">Frequenz (f₀) <select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
+          <span class="pval" id="val-f0">3 GHz · λ = 10.0 cm</span>
         </div>
-        <input type="range" id="sl-f0" min="1" max="100" value="30" step="1">
-      </div>
-      <div class="slider-group" style="color:var(--blue)">
-        <div class="slider-label">
-          <span class="pname">d</span>
-          <span class="pval" id="val-d">36 cm · d/λ = 3.60</span>
-        </div>
-        <input type="range" id="sl-d" min="5" max="200" value="36" step="1">
-      </div>
-      <div class="slider-group" style="color:var(--blue)">
-        <div class="slider-label">
-          <span class="pname">N</span>
-          <span class="pval" id="val-N">2</span>
-        </div>
-        <input type="range" id="sl-N" min="1" max="100" value="2" step="1">
+        <input type="range" id="sl-f0" min="1" max="1000" value="3" step="1">
       </div>
     </div>
 
@@ -462,27 +500,6 @@ self.onmessage = function(ev) {
       </div>
     </div>
 
-    <div class="sb-group">
-      <div class="sb-label">Presets</div>
-      <div class="preset-stack">
-        <button class="preset-btn" id="btn-reset">Reset</button>
-        <button class="preset-btn" id="btn-alt">Alt. Phase</button>
-        <button class="preset-btn" id="btn-beam">Beam-Steering</button>
-        <button class="preset-btn" id="btn-rnd">Zufällige Phase</button>
-        <button class="preset-btn" id="btn-half">Hälfte aus</button>
-      </div>
-    </div>
-
-    <div class="sb-stats">
-      <div class="stat-row"><span class="stat-key">λ</span><span class="stat-val" id="st-lam">—</span></div>
-      <div class="stat-row"><span class="stat-key">T</span><span class="stat-val" id="st-T">—</span></div>
-      <div class="stat-row"><span class="stat-key">k</span><span class="stat-val" id="st-k">—</span></div>
-      <div class="stat-row"><span class="stat-key">Gitterbreite</span><span class="stat-val" id="st-gw">—</span></div>
-      <div class="stat-row"><span class="stat-key">r_FF</span><span class="stat-val" id="st-rff">—</span></div>
-      <div class="stat-row"><span class="stat-key">Hauptmaxima</span><span class="stat-val" id="st-mm">—</span></div>
-      <div class="stat-row"><span class="stat-key">fps</span><span class="stat-val" id="st-fps">—</span></div>
-      <div class="stat-row"><span class="stat-key">Modus</span><span class="stat-val" id="st-mode">analytisch</span></div>
-    </div>
 
   </aside>
 
@@ -492,6 +509,41 @@ self.onmessage = function(ev) {
     </div>
   </div>
 
+</div>
+
+<div class="bottom-bar">
+  <div class="bottom-presets">
+    <button class="preset-btn" id="btn-reset">Reset</button>
+    <select id="sel-presets" class="preset-btn preset-drop">
+      <option value="" disabled selected>Presets…</option>
+      <option value="alt">Alt. Phase</option>
+      <option value="beam">Beam-Steering</option>
+      <option value="rnd">Zufällige Phase</option>
+      <option value="half">Hälfte aus</option>
+    </select>
+  </div>
+  <div class="bottom-params">
+    <div class="bparam-col">
+      <div class="bstat">
+        <span class="bstat-key">Wellenlänge (λ₀)</span>
+        <span class="bstat-val" id="st-lam">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">Fraunhofer Abstand (Fernfeld)</span>
+        <span class="bstat-val" id="st-rff">—</span>
+      </div>
+    </div>
+    <div class="bparam-col">
+      <div class="bstat">
+        <span class="bstat-key">Periodendauer (T)</span>
+        <span class="bstat-val" id="st-T">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">Frequenz (f₀)</span>
+        <span class="bstat-val" id="st-f0">—</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -539,10 +591,18 @@ let rFF       = 0;
 let screenLam    = 7.0;
 let screenOverride = true;
 
+let isDipolMode   = false;
+let dipolInfinite = true;
+let L_lam         = 0.5;
+
 let N_SRC = 10;
-let f0    = 1e9;
-let d_m   = 0.45;
+let f0    = 3e9;  // 3 GHz matches slider default
+let d_m   = 0.36;
 let d_lam = 1.5;
+const D_SCALES  = [{l:'pm',s:1e-12},{l:'nm',s:1e-9},{l:'µm',s:1e-6},{l:'mm',s:1e-3},{l:'m',s:1},{l:'km',s:1e3}];
+let d_unit_idx  = 3;  // mm
+const F0_SCALES = [{l:'µHz',s:1e-6},{l:'mHz',s:1e-3},{l:'Hz',s:1},{l:'kHz',s:1e3},{l:'MHz',s:1e6},{l:'GHz',s:1e9},{l:'THz',s:1e12}];
+let f0_unit_idx = 5;  // GHz
 
 let srcs = Array.from({length: 100}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
 
@@ -551,7 +611,8 @@ const xGrid = new Float64Array(NX);
 const yGrid = new Float64Array(NY);
 const R_mat = new Float64Array(100 * NX * NY);
 
-const screenAcc  = new Float64Array(NY);
+const screenAcc   = new Float64Array(NY);  // EMA of Ez² → time-average ≈ ½A²
+const screenInst  = new Float64Array(NY);  // instantaneous Ez² for blue curve
 const SCREEN_DECAY = 0.05;
 
 let simTime = 0;
@@ -559,7 +620,6 @@ let lastTs  = null;
 let isLight  = true;
 let isPaused = false;
 
-let fpsCount = 0, fpsLast = 0, fpsVal = 0;
 
 const canvas  = document.getElementById('field');
 const ctx     = canvas.getContext('2d');
@@ -640,7 +700,10 @@ function recompute() {
   T_per = 1 / f0;
   d_lam = d_m * f0 / C_LIGHT;
 
-  rFF = (N_SRC <= 1) ? 0 : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
+  rFF = (isDipolMode && dipolInfinite) ? NaN
+      : isDipolMode ? 2 * L_lam * L_lam
+      : (N_SRC <= 1) ? 0
+      : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
   if (!screenOverride) {
     screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
   }
@@ -693,6 +756,37 @@ function computeField(t) {
   return Ez;
 }
 
+function computePlanarField(t) {
+  const Ez = new Float32Array(NX * NY);
+  const om = 2 * Math.PI * f0;
+  const k  = om / C_LIGHT;
+  for (let i = 0; i < NX; i++) {
+    const val = Math.cos(om * t - k * xGrid[i]);
+    for (let j = 0; j < NY; j++) Ez[i * NY + j] = val;
+  }
+  return Ez;
+}
+
+function computeDipoleField(t, Llam) {
+  const Ez = new Float32Array(NX * NY);
+  const om = 2 * Math.PI * f0;
+  const k  = om / C_LIGHT;
+  const L  = Llam * lam;
+  const M  = Math.max(20, Math.min(300, Math.ceil(Llam * 16)));
+  for (let m = 0; m < M; m++) {
+    const yp     = -L / 2 + m / (M - 1) * L;
+    const weight = Math.cos(Math.PI * yp / L);  // sinusoidal standing-wave current
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const r = Math.sqrt(xGrid[i] * xGrid[i] + (yGrid[j] - yp) * (yGrid[j] - yp));
+        if (r < MIN_R_LAM * lam) continue;
+        Ez[i * NY + j] += weight * Math.cos(om * t - k * r) / r;
+      }
+    }
+  }
+  return Ez;
+}
+
 function iScreen() {
   const Lm = screenLam * lam;
   let best = 0, bd = Infinity;
@@ -710,14 +804,19 @@ function render(ts) {
   lastTs = ts;
   if (!isPaused) simTime += dt * animSpeed;
 
-  fpsCount++;
-  if (ts - fpsLast > 1000) {
-    fpsVal = Math.round(fpsCount * 1000 / (ts - fpsLast));
-    fpsCount = 0; fpsLast = ts;
-    document.getElementById('st-fps').textContent = fpsVal + ' fps';
+  let Ez;
+  if (isDipolMode) {
+    Ez = dipolInfinite ? computePlanarField(simTime * T_per)
+                       : computeDipoleField(simTime * T_per, L_lam);
+    // Far-field B approximation: Bx=0, By=-Ez/c
+    if (!wsLatestBx || wsLatestBx.length !== NX * NY) {
+      wsLatestBx = new Float32Array(NX * NY);
+      wsLatestBy = new Float32Array(NX * NY);
+    }
+    for (let _i = 0; _i < NX * NY; _i++) wsLatestBy[_i] = -Ez[_i] / C_LIGHT;
+  } else {
+    Ez = (wsActive && wsLatestEz) ? wsLatestEz : computeField(simTime * T_per);
   }
-
-  const Ez = (wsActive && wsLatestEz) ? wsLatestEz : computeField(simTime * T_per);
 
   const px = imgData.data;
   let s2 = 0;
@@ -735,7 +834,8 @@ function render(ts) {
   const is = iScreen();
   for (let j = 0; j < NY; j++) {
     const v = Ez[is * NY + j];
-    screenAcc[j] = screenAcc[j] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+    screenInst[j] = v * v;
+    screenAcc[j]  = screenAcc[j] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
   }
 
   draw();
@@ -918,12 +1018,12 @@ function draw() {
   if (rFF > XL0 + 0.5 && rFF < XL1 * 0.99) {
     const xRFF = xPx(rFF);
     ctx.beginPath(); ctx.moveTo(xRFF, fy0); ctx.lineTo(xRFF, fy0 + fh);
-    ctx.strokeStyle = GOLD + '88'; ctx.lineWidth = 1.0;
-    ctx.setLineDash([3, 6]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.font = `300 14px 'DM Mono', monospace`;
-    ctx.fillStyle = GOLD + 'aa';
+    ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 5;
+    ctx.setLineDash([8, 8]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `400 14px 'DM Mono', monospace`;
+    ctx.fillStyle = GOLD;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText('r_FF', xRFF + 4, fy0 + 4);
+    ctx.fillText('Fernfeld', xRFF + 6, fy0 + 4);
   }
 
   if (showBField && wsActive && wsLatestBx && wsLatestBy) {
@@ -932,7 +1032,7 @@ function draw() {
 
   ctx.font = `400 14px 'DM Mono', monospace`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  if (!wsLatestBx) {
+  if (!isDipolMode && !wsLatestBx) {
     ctx.fillStyle = isLight ? '#1a7fb5cc' : '#6ed0ffcc';
     ctx.fillText('Ez  (wird berechnet…)', fx0 + 8, fy0 + 6);
   }
@@ -942,28 +1042,46 @@ function draw() {
   ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 7;
   ctx.setLineDash([]); ctx.stroke();
 
-  for (let n = 0; n < N_SRC; n++) {
-    if (srcs[n].amp < 1e-6) continue;
-    const yn = (n - (N_SRC - 1) / 2) * d_lam;
-    const xp = xPx(0), yp = yPx(yn);
-    ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
-    ctx.fillStyle = BG; ctx.fill();
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+  if (isDipolMode) {
+    const x0 = xPx(0);
+    if (dipolInfinite) {
+      ctx.beginPath(); ctx.moveTo(x0, fy0); ctx.lineTo(x0, fy0 + fh);
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x0, yPx( L_lam / 2));
+      ctx.lineTo(x0, yPx(-L_lam / 2));
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 7; ctx.setLineDash([]); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x0, yPx( L_lam / 2), 3, 0, 2 * Math.PI);
+      ctx.fillStyle = GOLD; ctx.fill();
+      ctx.beginPath(); ctx.arc(x0, yPx(-L_lam / 2), 3, 0, 2 * Math.PI);
+      ctx.fillStyle = GOLD; ctx.fill();
+    }
+  } else {
+    for (let n = 0; n < N_SRC; n++) {
+      if (srcs[n].amp < 1e-6) continue;
+      const yn = (n - (N_SRC - 1) / 2) * d_lam;
+      const xp = xPx(0), yp = yPx(yn);
+      ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = BG; ctx.fill();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+    }
   }
 
   ctx.font = `300 14px 'DM Mono', monospace`;
   ctx.fillStyle = AXIS; ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.beginPath(); ctx.moveTo(fx0, fy0); ctx.lineTo(fx0, fy0 - 5); ctx.stroke();
-  ctx.fillText('0', fx0, fy0 - 6);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.beginPath(); ctx.moveTo(fx0, fy0 + fh); ctx.lineTo(fx0, fy0 + fh + 5); ctx.stroke();
+  ctx.fillText('0', fx0, fy0 + fh + 6);
   for (let v = xTickStep; v < XL1; v += xTickStep) {
     const xp = xPx(v);
     if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
-    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 - 5); ctx.stroke();
-    ctx.fillText(v, xp, fy0 - 6);
+    ctx.beginPath(); ctx.moveTo(xp, fy0 + fh); ctx.lineTo(xp, fy0 + fh + 5); ctx.stroke();
+    ctx.fillText(v, xp, fy0 + fh + 6);
   }
   ctx.textAlign = 'right';
-  ctx.fillText('x/λ', fx0 + fw, fy0 - 6);
+  ctx.fillText('x / λ', fx0 + fw, fy0 + fh + 6);
 
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   makeYTicks(ylHalf, false).forEach(v => {
@@ -982,20 +1100,22 @@ function draw() {
   ctx.beginPath(); ctx.moveTo(FIELD_W, 0); ctx.lineTo(FIELD_W, FH);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
 
-  const SX      = FIELD_W + 1;
-  const AXIS_W  = 46;
+  const SX       = FIELD_W + 1;
+  const AXIS_W   = 46;
+  const RIGHT_W  = 44;
   const CURVE_X0 = SX + AXIS_W + 1;
-  const iPW     = SCREEN_W - AXIS_W - 4;
+  const iPW      = SCREEN_W - AXIS_W - RIGHT_W - 2;
+  const RIGHT_X0 = CURVE_X0 + iPW + 1;
 
   ctx.fillStyle = PANEL;
-  ctx.fillRect(SX, 0, SCREEN_W, FH);
+  ctx.fillRect(SX, 0, SCREEN_W, H);
 
   ctx.beginPath();
   ctx.moveTo(SX + AXIS_W, fy0); ctx.lineTo(SX + AXIS_W, fy0 + fh);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
 
   const scrYpx = v => fy0 + (1 - (v - YL0) / (YL1 - YL0)) * fh;
-  ctx.font = `300 13px 'DM Mono', monospace`;
+  ctx.font = `300 14px 'DM Mono', monospace`;
   ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
   makeYTicks(ylHalf, true).forEach(v => {
@@ -1004,63 +1124,137 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
     ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
     ctx.fillText(v, SX + AXIS_W - 7, yp);
-    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + SCREEN_W, yp);
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(RIGHT_X0, yp);
     ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
   });
-  ctx.font = `300 12px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.fillText('y/λ', SX + AXIS_W / 2, fy0);
+  ctx.save();
+  ctx.translate(SX + AXIS_W / 2, fy0 + fh / 2); ctx.rotate(-Math.PI / 2);
+  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('y / λ', 0, 0);
+  ctx.restore();
   [0.25, 0.5, 0.75, 1.0].forEach(f => {
     const xp = CURVE_X0 + f * iPW;
     ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
   });
 
-  const Imax = Math.max(...screenAcc, 1e-30);
+  // ── Precompute analytical intensity pattern (far-field approximation) ──
+  let I_buf_ana = null, I_peak_ana = 0;
+  if (isDipolMode && !dipolInfinite) {
+    I_buf_ana = new Float32Array(NY);
+    for (let j = 0; j < NY; j++) {
+      const yLam  = YL0 + (YL1 - YL0) * j / (NY - 1);
+      const r0    = Math.sqrt(screenLam * screenLam + yLam * yLam);
+      const sinT  = yLam / r0;
+      const u     = L_lam * sinT;
+      const denom = 1 - (2 * u) * (2 * u);
+      const F     = Math.abs(denom) < 1e-6
+        ? L_lam / 2
+        : (2 * L_lam / Math.PI) * Math.cos(Math.PI * u) / denom;
+      I_buf_ana[j] = (F * F) / (r0 * r0);
+      if (I_buf_ana[j] > I_peak_ana) I_peak_ana = I_buf_ana[j];
+    }
+  } else if (!isDipolMode) {
+    const allSameFreq = Array.from({length: N_SRC}, (_, n) => n)
+      .every(n => Math.abs(srcs[n].fmul - 1.0) < 0.01);
+    if (allSameFreq && N_SRC > 1) {
+      I_buf_ana = new Float32Array(NY);
+      for (let j = 0; j < NY; j++) {
+        const yLam = YL0 + (YL1 - YL0) * j / (NY - 1);
+        let re = 0, im = 0;
+        for (let n = 0; n < N_SRC; n++) {
+          if (srcs[n].amp < 1e-6) continue;
+          const yn  = (n - (N_SRC - 1) / 2) * d_lam;
+          const r_n = Math.sqrt(screenLam*screenLam + (yLam - yn)*(yLam - yn));
+          const ph  = 2 * Math.PI * srcs[n].fmul * r_n - srcs[n].phase;
+          re += srcs[n].amp / r_n * Math.cos(ph);
+          im += srcs[n].amp / r_n * Math.sin(ph);
+        }
+        I_buf_ana[j] = re*re + im*im;
+        if (I_buf_ana[j] > I_peak_ana) I_peak_ana = I_buf_ana[j];
+      }
+    }
+  }
+
+  // Blue: instantaneous Ez², self-normalized so peak = 1.
+  const Inorm = Math.max(...screenInst, 1e-30);
   ctx.beginPath();
   for (let j = 0; j < NY; j++) {
-    const xp = CURVE_X0 + (screenAcc[j] / Imax) * iPW;
+    const xp = CURVE_X0 + Math.min(screenInst[j] / Inorm, 1) * iPW;
     const yp = fy0 + (1 - j / (NY - 1)) * fh;
     j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
   }
   ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
 
-  const allSameFreq = Array.from({length: N_SRC}, (_, n) => n)
-    .every(n => Math.abs(srcs[n].fmul - 1.0) < 0.01);
-  if (allSameFreq && N_SRC > 1) {
-    let I_peak = 0;
-    const I_buf = new Float32Array(NY);
+  // Gold: analytical pattern, self-normalized so peak = 1.
+  ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
+  if (isDipolMode && dipolInfinite) {
+    ctx.beginPath();
+    ctx.moveTo(CURVE_X0 + iPW, fy0);
+    ctx.lineTo(CURVE_X0 + iPW, fy0 + fh);
+    ctx.stroke();
+  } else if (I_buf_ana && I_peak_ana > 0) {
+    ctx.beginPath();
     for (let j = 0; j < NY; j++) {
-      const yLam = YL0 + (YL1 - YL0) * j / (NY - 1);
-      let re = 0, im = 0;
-      for (let n = 0; n < N_SRC; n++) {
-        if (srcs[n].amp < 1e-6) continue;
-        const yn   = (n - (N_SRC - 1) / 2) * d_lam;
-        const r_n  = Math.sqrt(screenLam*screenLam + (yLam - yn)*(yLam - yn));
-        const ph   = 2 * Math.PI * srcs[n].fmul * r_n - srcs[n].phase;
-        re += srcs[n].amp / r_n * Math.cos(ph);
-        im += srcs[n].amp / r_n * Math.sin(ph);
-      }
-      I_buf[j] = re*re + im*im;
-      if (I_buf[j] > I_peak) I_peak = I_buf[j];
+      const xp = CURVE_X0 + (I_buf_ana[j] / I_peak_ana) * iPW;
+      const yp = fy0 + (1 - j / (NY - 1)) * fh;
+      j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
     }
-    if (I_peak > 0) {
-      ctx.beginPath();
-      for (let j = 0; j < NY; j++) {
-        const xp = CURVE_X0 + (I_buf[j] / I_peak) * iPW;
-        const yp = fy0 + (1 - j / (NY - 1)) * fh;
-        j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
-      }
-      ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2;
-      ctx.setLineDash([3,4]); ctx.stroke(); ctx.setLineDash([]);
-    }
+    ctx.stroke();
   }
+  ctx.setLineDash([]);
 
-  const midX = SX + AXIS_W + (SCREEN_W - AXIS_W) / 2;
-  ctx.font = `300 13px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText('I (y)', midX, fy0 + 4);
-  ctx.fillText('x = ' + screenLam.toFixed(1) + 'λ', midX, fy0 + 18);
-  ctx.fillStyle = GOLD + 'bb'; ctx.fillText('— anal.', midX, fy0 + 32);
+
+  // ── Physical y-axis (right side of intensity panel) ─────────────────────────
+  const Y2_UNITS = [
+    {label:'km',scale:1e3},{label:'m',scale:1},{label:'mm',scale:1e-3},
+    {label:'µm',scale:1e-6},{label:'nm',scale:1e-9},{label:'pm',scale:1e-12}
+  ];
+  const y2MaxPhys = ylHalf * lam;
+  const y2u = Y2_UNITS.find(u => y2MaxPhys / u.scale >= 0.5) || Y2_UNITS[Y2_UNITS.length - 1];
+  const y2Ticks = makeYTicks(ylHalf, true);
+  const y2StepPhys = (y2Ticks.length > 1
+    ? Math.abs(y2Ticks[1] - y2Ticks[0]) : ylHalf) * lam / y2u.scale;
+  const y2Dec = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(y2StepPhys) + 1e-30))), 4);
+
+  ctx.beginPath(); ctx.moveTo(RIGHT_X0, fy0); ctx.lineTo(RIGHT_X0, fy0 + fh);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
+
+  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  y2Ticks.forEach(v => {
+    const yp = scrYpx(v);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(RIGHT_X0, yp); ctx.lineTo(RIGHT_X0 + 4, yp);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), RIGHT_X0 + 7, yp);
+  });
+  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(y2u.label, RIGHT_X0 + RIGHT_W / 2, fy0);
+
+  // ── Intensity panel legend (right-aligned, right 2/3 of plot) ──────────────
+  ctx.font = `300 18px 'DM Mono', monospace`;
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+  const RX  = RIGHT_X0 - 6;
+  const swL = 20, gap = 6, lh = 21;
+  const LY1 = fy0 + 14, LY2 = fy0 + 14 + lh + 4;
+  // Blue: I(t)
+  ctx.fillStyle = CYAN;
+  ctx.fillText('I(t)', RX, LY1);
+  const tw1 = ctx.measureText('I(t)').width;
+  ctx.beginPath(); ctx.moveTo(RX - tw1 - gap - swL, LY1); ctx.lineTo(RX - tw1 - gap, LY1);
+  ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+  // Gold: Ī(y) + (Fernfeld) on next line
+  ctx.fillStyle = GOLD + 'bb';
+  ctx.fillText('Ī(y)', RX, LY2);
+  const tw2 = ctx.measureText('Ī(y)').width;
+  ctx.beginPath(); ctx.moveTo(RX - tw2 - gap - swL, LY2); ctx.lineTo(RX - tw2 - gap, LY2);
+  ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = `300 12px 'DM Mono', monospace`;
+  ctx.textAlign = 'left';
+  ctx.fillText('(Fernfeld)', RX - tw2 - gap - swL, LY2 + lh);
 
   ctx.beginPath(); ctx.moveTo(0, FH); ctx.lineTo(FIELD_W, FH);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 0.6; ctx.stroke();
@@ -1083,32 +1277,32 @@ function draw() {
   const x2Dec   = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(x2Step)))), 4);
 
   ctx.font = `300 14px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   for (let v = x2First; v <= x2Last + x2Step * 0.01; v += x2Step) {
     v = Math.round(v / (x2Step * 1e-6)) * x2Step * 1e-6;
     const xLam = (v * x2u.scale) / lam;
     const xp   = xPx(xLam);
     if (xp < fx0 + 6 || xp > fx0 + fw - 6) continue;
-    ctx.beginPath(); ctx.moveTo(xp, FH); ctx.lineTo(xp, FH + 4);
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 - 4);
     ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
-    ctx.fillText(v.toFixed(x2Dec), xp, FH + 5);
+    ctx.fillText(v.toFixed(x2Dec), xp, fy0 - 5);
   }
   ctx.textAlign = 'right';
-  ctx.fillText(x2u.label, fx0 + fw, FH + 5);
+  ctx.fillText(x2u.label, fx0 + fw - 4, fy0 - 5);
 }
 
 function updateStats() {
   if (!lam) return;
   document.getElementById('st-lam').textContent = (lam * 100).toFixed(2) + ' cm';
   document.getElementById('st-T').textContent   = (T_per * 1e9).toFixed(2) + ' ns';
-  document.getElementById('st-k').textContent   = k0.toFixed(1) + ' m⁻¹';
-  document.getElementById('st-gw').textContent  = ((N_SRC - 1) * d_lam).toFixed(2) + ' λ';
-  const mm = [-1, 0, 1].filter(m => Math.abs(m / d_lam) < 1)
-    .map(m => `m=${m}: ${(10 * m / d_lam).toFixed(2)}λ`).join('  ');
-  document.getElementById('st-mm').textContent = mm || 'd/λ > 1, m=±1 outside';
-  const rFFtext = N_SRC <= 1 ? '—'
-    : rFF > XL1 ? '> ' + XL1.toFixed(0) + ' λ'
-    : rFF.toFixed(1) + ' λ';
+  document.getElementById('st-f0').textContent  = (f0 / 1e9).toFixed(2) + ' GHz';
+  let rFFtext = '—';
+  if (!isNaN(rFF) && rFF > 0) {
+    const rFFm = rFF * lam;
+    const UNITS = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6}];
+    const u = UNITS.find(u => rFFm / u.s >= 0.5) || UNITS[UNITS.length - 1];
+    rFFtext = (rFFm / u.s).toFixed(2) + ' ' + u.l;
+  }
   document.getElementById('st-rff').textContent = rFFtext;
 }
 
@@ -1151,8 +1345,6 @@ slSrcF.addEventListener('input', () => { srcs[selectedSrc].fmul  = slSrcF.value 
 slSrcP.addEventListener('input', () => { srcs[selectedSrc].phase = (slSrcP.value / 100) * Math.PI; vlSrcP.textContent = (slSrcP.value / 100).toFixed(2) + 'π'; screenAcc.fill(0); });
 
 function readGlobals() {
-  f0  = Number(document.getElementById('sl-f0').value) * 1e8;
-  d_m = Number(document.getElementById('sl-d').value) / 100;
   const newN = Number(document.getElementById('sl-N').value);
   if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
 
@@ -1180,22 +1372,112 @@ function readGlobals() {
   if (xPhysMax  === null) xPhysMax  = XL1    * lam;
   if (yPhysHalf === null) yPhysHalf = ylHalf * lam;
 
-  const dCm = (d_m * 100).toFixed(0);
-  const lamStr = lam >= 1 ? lam.toFixed(2) + ' m' : (lam * 100).toFixed(1) + ' cm';
-  document.getElementById('val-f0').textContent = (f0/1e9).toFixed(2) + ' GHz · λ = ' + lamStr;
-  document.getElementById('val-d').textContent  = dCm + ' cm · d/λ = ' + d_lam.toFixed(2);
-  document.getElementById('val-N').textContent  = newN;
+  document.getElementById('val-N').textContent = newN;
 }
-['sl-f0','sl-d','sl-N'].forEach(id =>
-  document.getElementById(id).addEventListener('input', readGlobals)
-);
+document.getElementById('sl-N').addEventListener('input', readGlobals);
+
+function lamStr() {
+  const LAM_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
+  const u = LAM_U.find(u => lam / u.s >= 0.5) || LAM_U[LAM_U.length - 1];
+  return (lam / u.s).toFixed(2) + ' ' + u.l;
+}
+function updateF0Display() {
+  const u = F0_SCALES[f0_unit_idx];
+  const v = f0 / u.s;
+  document.getElementById('sl-f0').value = Math.round(v);
+  document.getElementById('btn-f0-unit').value = u.l;
+  document.getElementById('val-f0').textContent = Math.round(v) + ' ' + u.l + ' · λ = ' + lamStr();
+}
+const _slF0 = document.getElementById('sl-f0');
+_slF0.addEventListener('input', function() {
+  f0 = Number(this.value) * F0_SCALES[f0_unit_idx].s;
+  readGlobals();
+  updateF0Display();
+});
+_slF0.addEventListener('change', function() {
+  const v = Number(this.value);
+  if (v >= 1000 && f0_unit_idx < F0_SCALES.length - 1) {
+    f0_unit_idx++; this.value = 1;
+  } else if (v <= 1 && f0_unit_idx > 0) {
+    f0_unit_idx--; this.value = 1000;
+  }
+  f0 = Number(this.value) * F0_SCALES[f0_unit_idx].s;
+  readGlobals();
+  updateF0Display();
+});
+document.getElementById('btn-f0-unit').addEventListener('change', function() {
+  const newIdx = F0_SCALES.findIndex(u => u.l === this.value);
+  if (newIdx >= 0) f0_unit_idx = newIdx;
+  readGlobals();
+  updateF0Display();
+});
+
+function updateDDisplay() {
+  const u = D_SCALES[d_unit_idx];
+  const v = d_m / u.s;
+  document.getElementById('sl-d').value = Math.round(v);
+  document.getElementById('btn-d-unit').value = u.l;
+  document.getElementById('val-d').textContent = Math.round(v) + ' ' + u.l + ' · d/λ = ' + d_lam.toFixed(2);
+}
+
+const _slD = document.getElementById('sl-d');
+_slD.addEventListener('input', function() {
+  d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
+  readGlobals();
+  updateDDisplay();
+});
+_slD.addEventListener('change', function() {
+  const v = Number(this.value);
+  if (v >= 1000 && d_unit_idx < D_SCALES.length - 1) {
+    d_unit_idx++; this.value = 1;
+  } else if (v <= 1 && d_unit_idx > 0) {
+    d_unit_idx--; this.value = 1000;
+  }
+  d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
+  readGlobals();
+  updateDDisplay();
+});
+
+document.getElementById('btn-d-unit').addEventListener('change', function() {
+  const newIdx = D_SCALES.findIndex(u => u.l === this.value);
+  if (newIdx >= 0) d_unit_idx = newIdx;
+  readGlobals();
+  updateDDisplay();
+});
+
+function applyMode() {
+  isDipolMode = document.getElementById('sel-mode').value === 'dipol';
+  document.getElementById('sg-punkt').style.display  = isDipolMode ? 'none' : '';
+  document.getElementById('sg-dipole').style.display = isDipolMode ? ''     : 'none';
+  screenAcc.fill(0);
+  wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+  recompute();
+}
+function applyDipolControls() {
+  dipolInfinite = document.getElementById('chk-infinite').checked;
+  L_lam = Number(document.getElementById('sl-L').value);
+  document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
+  document.getElementById('val-L').textContent = L_lam.toFixed(3).replace(/\.?0+$/, '');
+  screenAcc.fill(0);
+  wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+  recompute();
+}
+document.getElementById('sel-mode').addEventListener('change', applyMode);
+document.getElementById('chk-infinite').addEventListener('change', applyDipolControls);
+document.getElementById('sl-L').addEventListener('input', applyDipolControls);
 
 function preset(fn) { for (let n = 0; n < N_SRC; n++) fn(n); syncRows(); }
+const _presetFns = {
+  alt:  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }),
+  beam: () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }),
+  rnd:  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }),
+  half: () => preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }),
+};
 document.getElementById('btn-reset').addEventListener('click', () => { screenOverride = false; preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; }); });
-document.getElementById('btn-alt').addEventListener('click',   () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }));
-document.getElementById('btn-beam').addEventListener('click',  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }));
-document.getElementById('btn-rnd').addEventListener('click',   () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }));
-document.getElementById('btn-half').addEventListener('click',  () => preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }));
+document.getElementById('sel-presets').addEventListener('change', e => {
+  if (_presetFns[e.target.value]) _presetFns[e.target.value]();
+  e.target.value = '';
+});
 
 document.getElementById('sl-xl1').addEventListener('input', () => {
   XL1 = Number(document.getElementById('sl-xl1').value);
@@ -1218,6 +1500,7 @@ document.getElementById('sl-scr').addEventListener('input', () => {
   screenLam = Number(document.getElementById('sl-scr').value);
   document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
   screenAcc.fill(0);
+  updateStats();
 });
 
 document.getElementById('chk-efield').addEventListener('change', e => { showEField = e.target.checked; });
@@ -1300,12 +1583,14 @@ function workerInit() {
     wsPending = false; completeLoading();
   };
   wsActive = true;
-  document.getElementById('st-mode').textContent = 'LW (lokal)';
   wsSendParams();
 }
 
 document.body.classList.add('light');
-buildRows(); readGlobals(); syncLoadBarSpeed(); workerInit(); requestAnimationFrame(render);
+buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); syncLoadBarSpeed(); workerInit(); requestAnimationFrame(render);
+// Apply initial dipole UI state after all variables are declared
+document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
+document.getElementById('val-L').textContent = L_lam.toFixed(3).replace(/\.?0+$/, '');
 </script>
 </body>
 </html>
