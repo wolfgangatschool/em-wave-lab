@@ -217,10 +217,9 @@ canvas#field { display: block; width: 100%; height: 100%; }
 @media (max-width: 600px) { :root { --sl-track: 5px; --sl-thumb: 20px; } }
 
 #y-slider-strip {
-  flex-shrink: 0; width: 28px;
+  position: absolute; left: 8px; top: 0;
   display: flex; flex-direction: column; align-items: center;
-  padding-top: 28px; padding-bottom: 52px; gap: 4px;
-  position: relative; z-index: 2; overflow: visible;
+  gap: 4px; z-index: 5; overflow: visible; pointer-events: none;
 }
 #val-yl {
   position: absolute;
@@ -233,7 +232,7 @@ canvas#field { display: block; width: 100%; height: 100%; }
 #y-slider-strip input[type="range"] {
   writing-mode: vertical-lr; direction: rtl;
   margin: 0; cursor: ns-resize;
-  width: var(--sl-thumb);
+  width: var(--sl-thumb); pointer-events: all;
 }
 #overlay-xl1 {
   position: absolute; bottom: 8px;
@@ -246,7 +245,7 @@ canvas#field { display: block; width: 100%; height: 100%; }
   color: var(--text-dim); white-space: nowrap;
 }
 #btn-lock {
-  position: absolute; left: 58px; bottom: 56px; z-index: 10;
+  position: absolute; left: 15px; transform: translateX(-50%); bottom: 8px; z-index: 10;
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-size: 13px; padding: 2px 6px;
   cursor: pointer; opacity: 0.75; line-height: 1.4;
@@ -369,7 +368,7 @@ function upsample(src, sw, sh, dw, dh) {
 self.onmessage = function(ev) {
   var p    = ev.data;
   var f0   = p.f0, d_m = p.d_m, N = p.N, srcs = p.srcs, t = p.t;
-  var XL1  = p.xl1 || 10, YL0 = p.yl0 || -7.5, YL1 = p.yl1 || 7.5;
+  var XL1  = p.xl1 || 12, YL0 = p.yl0 || -4, YL1 = p.yl1 || 4;
   var lam  = C_W / f0;
 
   var xA = new Float64Array(NX_W), yA = new Float64Array(NY_W);
@@ -498,7 +497,7 @@ self.onmessage = function(ev) {
             <span class="pname">Abstand (d) <select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
             <span class="pval" id="val-d">360 mm · d/λ = 3.60</span>
           </div>
-          <input type="range" id="sl-d" min="1" max="1000" value="360" step="1">
+          <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
         </div>
       </div>
       <div id="sg-dipole" style="display:none">
@@ -518,7 +517,7 @@ self.onmessage = function(ev) {
           <span class="pname">Frequenz (f₀) <select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
           <span class="pval" id="val-f0">3 GHz · λ = 10.0 cm</span>
         </div>
-        <input type="range" id="sl-f0" min="1" max="1000" value="3" step="1">
+        <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
       </div>
     </div>
 
@@ -553,9 +552,9 @@ self.onmessage = function(ev) {
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label">
           <span class="pname">Schirm</span>
-          <span class="pval" id="val-scr">7.0 λ</span>
+          <span class="pval" id="val-scr">10.0 λ</span>
         </div>
-        <input type="range" id="sl-scr" min="1" max="10" value="7" step="0.5">
+        <input type="range" id="sl-scr" min="1" max="10" value="10" step="0.5">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label">
@@ -578,16 +577,16 @@ self.onmessage = function(ev) {
   </aside>
 
   <div class="canvas-area">
-    <div id="y-slider-strip">
-      <span class="ax-val" id="val-yl">7.5 λ</span>
-      <input type="range" id="sl-yl" min="0.5" max="30" value="7.5" step="0.5">
-    </div>
     <div class="canvas-wrap">
       <canvas id="field"></canvas>
       <button id="btn-lock" title="Skalierung koppeln">🔓</button>
+      <div id="y-slider-strip">
+        <span class="ax-val" id="val-yl">4 λ</span>
+        <input type="range" id="sl-yl" min="0.5" max="30" value="4" step="0.5">
+      </div>
       <div id="overlay-xl1">
-        <input type="range" id="sl-xl1" min="1" max="100" value="10" step="1">
-        <span class="ax-val" id="val-xl1">10 λ</span>
+        <input type="range" id="sl-xl1" min="1" max="100" value="12" step="1">
+        <span class="ax-val" id="val-xl1">12 λ</span>
       </div>
     </div>
   </div>
@@ -652,8 +651,8 @@ function cmRGB(t) {
 const NX = 110, NY = 90;
 const XL0 = 0.0;
 const MIN_R_LAM = 0.05;  // exclusion radius in wavelengths
-let   XL1 = 10;
-let   ylHalf = 7.5;
+let   XL1 = 12;
+let   ylHalf = 4;
 let YL0 = -ylHalf, YL1 = ylHalf;
 let xPhysMax = null, yPhysHalf = null;  // physical extents in metres; null until init
 
@@ -689,16 +688,16 @@ let showBField  = true;
 let animSpeed   = 0.5;
 
 let rFF       = 0;
-let screenLam    = 7.0;
+let screenLam    = 10.0;
 let screenOverride = true;
 
 let isDipolMode   = false;
 let dipolInfinite = true;
 let L_lam         = 0.5;
 
-let N_SRC = 10;
-let f0    = 3e9;  // 3 GHz matches slider default
-let d_m   = 0.36;
+let N_SRC = 2;
+let f0    = 6e9;  // 6 GHz matches slider default
+let d_m   = 0.1;
 let d_lam = 1.5;
 const D_SCALES  = [{l:'pm',s:1e-12},{l:'nm',s:1e-9},{l:'µm',s:1e-6},{l:'mm',s:1e-3},{l:'m',s:1},{l:'km',s:1e3}];
 let d_unit_idx  = 3;  // mm
@@ -1094,24 +1093,25 @@ function updateAxisSliders() {
   slXl1.min = 1; slXl1.max = xMax;
   slYl.min  = 1; slYl.max  = yMax;
 
-  // Position val-yl at the top of the y-scale and shorten slider to fit below it
+  // Mirror overlay-xl1 pattern: set top/height from layout
   const valYlEl = document.getElementById('val-yl');
-  valYlEl.style.top = _layoutFy0 + 'px';
-  const textH = valYlEl.offsetHeight || 0;
+  const textH = Math.max(valYlEl.offsetHeight, 32);
   const gap   = 6;
   const strip = document.getElementById('y-slider-strip');
-  strip.style.paddingTop = (_layoutFy0 + textH + gap) + 'px';
+  valYlEl.style.top = '0';
+  strip.style.top = _layoutFy0 + 'px';
+  strip.style.paddingTop = (textH + gap) + 'px';
   const sliderH = Math.max(20, _layoutFh - textH - gap);
   slYl.style.height = sliderH + 'px';
 
   // On first valid layout, initialise y to match x scale
   if (!_axisInit && lam > 0) {
     _axisInit = true;
-    ylHalf    = Math.max(1, Math.min(yMax, aspectYHalf(XL1)));
     yPhysHalf = ylHalf * lam;
-    YL0 = -ylHalf; YL1 = ylHalf;
+    xPhysMax  = XL1 * lam;
     slYl.value = ylHalf.toFixed(3);
     document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
   }
 }
 
@@ -1412,7 +1412,7 @@ function draw() {
   ctx.textAlign = 'left';
   ctx.fillText('(Fernfeld)', RX - tw2 - gap - swL, LY2 + lh);
 
-  ctx.beginPath(); ctx.moveTo(0, FH); ctx.lineTo(FIELD_W, FH);
+  ctx.beginPath(); ctx.moveTo(fx0, FH); ctx.lineTo(FIELD_W, FH);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 0.6; ctx.stroke();
 
   const X2_UNITS = [
@@ -1532,11 +1532,26 @@ function updateF0Display() {
   document.getElementById('btn-f0-unit').value = u.l;
   document.getElementById('val-f0').textContent = Math.round(v) + ' ' + u.l + ' · λ = ' + lamStr();
 }
+function onFreqChange() {
+  // Keep physical extents constant: recompute XL1/ylHalf from stored metres
+  if (xPhysMax !== null && f0 > 0) {
+    const newLam = C_LIGHT / f0;
+    XL1    = Math.max(1, xPhysMax  / newLam);
+    ylHalf = Math.max(1, yPhysHalf / newLam);
+    YL0 = -ylHalf; YL1 = ylHalf;
+    document.getElementById('sl-xl1').value = XL1.toFixed(3);
+    document.getElementById('sl-yl').value  = ylHalf.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
+  }
+  readGlobals();
+  updateF0Display();
+}
+
 const _slF0 = document.getElementById('sl-f0');
 _slF0.addEventListener('input', function() {
   f0 = Number(this.value) * F0_SCALES[f0_unit_idx].s;
-  readGlobals();
-  updateF0Display();
+  onFreqChange();
 });
 _slF0.addEventListener('change', function() {
   const v = Number(this.value);
@@ -1546,14 +1561,12 @@ _slF0.addEventListener('change', function() {
     f0_unit_idx--; this.value = 1000;
   }
   f0 = Number(this.value) * F0_SCALES[f0_unit_idx].s;
-  readGlobals();
-  updateF0Display();
+  onFreqChange();
 });
 document.getElementById('btn-f0-unit').addEventListener('change', function() {
   const newIdx = F0_SCALES.findIndex(u => u.l === this.value);
   if (newIdx >= 0) f0_unit_idx = newIdx;
-  readGlobals();
-  updateF0Display();
+  onFreqChange();
 });
 
 function updateDDisplay() {
