@@ -1359,7 +1359,16 @@ function draw() {
     if (la && wrap) {
       const cl = canvas.getBoundingClientRect().left;
       const lr = la.getBoundingClientRect();
-      wrap.style.marginLeft  = Math.max(0, cl + fx0 - lr.left).toFixed(0) + 'px';
+      const desktopLeft = Math.max(0, cl + fx0 - lr.left);
+      if (isMob) {
+        // On mobile the play button sits absolute at left≈4px inside load-area.
+        // Push bar start past the button's right edge so there is a gap between them.
+        const btnPlay2 = document.getElementById('btn-play');
+        const btnEnd   = btnPlay2 ? btnPlay2.offsetLeft + btnPlay2.offsetWidth + 8 : 0;
+        wrap.style.marginLeft = Math.max(btnEnd, desktopLeft).toFixed(0) + 'px';
+      } else {
+        wrap.style.marginLeft = desktopLeft.toFixed(0) + 'px';
+      }
       wrap.style.marginRight = '0px';
       // Push bar down so its centre aligns with play button centre and c-slider track.
       // marginTop = (btnHeight - barHeight) / 2 is the exact fixed point where
