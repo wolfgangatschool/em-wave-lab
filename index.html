@@ -52,14 +52,13 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   padding: 7px 14px;
 }
 .header-title {
-  font-family: 'DM Mono', monospace; font-size: 13px;
-  font-weight: 400; color: var(--text-dim); letter-spacing: .05em;
+  font-family: 'DM Mono', monospace; font-size: 18px;
+  font-weight: 500; color: var(--text-bright); letter-spacing: .05em;
   flex-shrink: 0; margin-right: 4px;
 }
-.header-title strong { font-weight: 500; color: var(--text-bright); }
-.header-title em     { font-style: italic; color: var(--gold); }
 .load-area {
-  flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 3px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 4px 0 2px; flex-shrink: 0;
 }
 .load-bar-wrap {
   height: 3px; border-radius: 2px;
@@ -185,10 +184,10 @@ select.src-select:focus { border-color: var(--text-dim); }
 .unit-btn {
   background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
-  padding: 1px 2px; cursor: pointer; transition: border-color .15s, color .15s;
+  padding: 1px 4px; cursor: pointer; transition: border-color .15s, color .15s;
   vertical-align: middle; line-height: 1.4; outline: none;
   -webkit-appearance: none; appearance: none;
-  width: 3.4ch;
+  width: 4.2ch;
 }
 .unit-btn:hover { border-color: var(--text-dim); color: var(--text-bright); }
 .unit-btn option { background: var(--panel); }
@@ -212,7 +211,7 @@ select.src-select:focus { border-color: var(--text-dim); }
 .bstat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); white-space: nowrap; }
 
 /* ── Canvas area ─────────────────────────────────────────────────── */
-.canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); display: flex; flex-direction: row; }
+.canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); display: flex; flex-direction: column; }
 .canvas-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 
@@ -511,13 +510,9 @@ self.onmessage = function(ev) {
 <header>
   <div class="header-inner">
     <div class="header-title">
-      <strong>EM-Wellen</strong> · <em>Feldlinien-Darstellung</em>
+      EM-Wellen
     </div>
     <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
-    <div class="load-area" id="load-area">
-      <div class="load-text" id="load-text">reloading…</div>
-      <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
-    </div>
     <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☾</button>
   </div>
 </header>
@@ -541,13 +536,13 @@ self.onmessage = function(ev) {
           <input type="range" id="sl-N" min="1" max="100" value="2" step="1">
         </div>
         <div class="slider-group" id="sg-d" style="color:var(--blue)">
-          <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
           <div class="slider-info">
             <span class="si-label">Abstand d =</span>
             <span class="si-val"><span id="val-d-phys">100</span><select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
             <span class="si-dim">d/λ =</span>
             <span class="si-val"><span id="val-d-lam">2.00</span></span>
           </div>
+          <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
         </div>
       </div>
       <div id="sg-dipole" style="display:none">
@@ -563,13 +558,13 @@ self.onmessage = function(ev) {
         </div>
       </div>
       <div class="slider-group" style="color:var(--gold)">
-        <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
         <div class="slider-info">
           <span class="si-label">Frequenz f₀ =</span>
           <span class="si-val"><span id="val-f0-phys">6</span><select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
           <span class="si-dim">λ =</span>
           <span class="si-val"><span id="val-f0-lam">5.00 cm</span></span>
         </div>
+        <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
       </div>
     </div>
 
@@ -635,6 +630,10 @@ self.onmessage = function(ev) {
   </aside>
 
   <div class="canvas-area">
+    <div class="load-area" id="load-area">
+      <div class="load-text" id="load-text">reloading…</div>
+      <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+    </div>
     <div class="canvas-wrap">
       <canvas id="field"></canvas>
       <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
@@ -1203,9 +1202,15 @@ function updateAxisSliders() {
 
   const ff    = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
   const xMax  = Math.ceil(Math.max(20, 2 * ff) / 5) * 5;
-  const yMax  = Math.max(1, Math.ceil(aspectYHalf(xMax) * 2) / 2);  // half-step resolution
   slXl1.min = 1; slXl1.max = xMax;
-  slYl.min  = 1; slYl.max  = yMax;
+  if (scaleLocked) {
+    const yFromMin = Math.round(aspectYHalf(Number(slXl1.min)) * 100) / 100;
+    const yFromMax = Math.round(aspectYHalf(xMax) * 100) / 100;
+    slYl.min = Math.max(0.25, yFromMin);
+    slYl.max = Math.max(Number(slYl.min) + 0.5, yFromMax);
+  } else {
+    slYl.min = 0.5; slYl.max = 30;
+  }
 
   // Mirror overlay-xl1 pattern: set top/height from layout
   const valYlEl = document.getElementById('val-yl');
