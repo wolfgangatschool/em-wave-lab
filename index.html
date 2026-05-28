@@ -299,9 +299,45 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   border-radius: 50%; background: var(--text-dim); border: none;
 }
 
-/* ── Mobile landscape: narrower sidebar, everything else unchanged ── */
+/* ── Mobile landscape: full-screen canvas, collapsible sidebar ───── */
+#btn-sidebar-toggle { display: none; }
+
 @media (max-width: 900px) and (orientation: landscape) {
-  :root { --sidebar-w: 180px; }
+  :root { --sidebar-w: 200px; }
+
+  /* Hide header for more vertical space */
+  header { display: none; }
+
+  /* Sidebar slides in from left as overlay */
+  .sidebar {
+    position: fixed; left: 0; top: 0; height: 100vh; z-index: 100;
+    transform: translateX(calc(-1 * var(--sidebar-w) - 2px));
+    transition: transform 0.22s ease;
+    box-shadow: none;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+  }
+
+  /* Canvas area fills full viewport */
+  .app { height: 100vh; }
+
+  /* Sidebar toggle — hamburger in top-left of canvas */
+  #btn-sidebar-toggle {
+    display: flex; align-items: center; justify-content: center;
+    position: absolute; left: 8px; top: 8px; z-index: 20;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 4px; color: var(--text-dim); font-size: 16px;
+    width: 30px; height: 30px; cursor: pointer; opacity: 0.8;
+  }
+  #btn-sidebar-toggle:hover { opacity: 1; }
+
+  /* Lock button repositioned to top-right of canvas */
+  #btn-lock {
+    left: auto; right: 8px; bottom: auto; top: 8px; transform: none;
+    font-size: 16px; padding: 4px 8px;
+  }
 }
 
 /* ── Portrait: rotate prompt ─────────────────────────────────────── */
@@ -334,7 +370,7 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 /* ── Mobile: hide axis sliders, move stats to sidebar ─────────── */
 #sb-stats-mobile { display: none; }
 @media (max-width: 900px) and (orientation: landscape) {
-  #y-slider-strip, #overlay-xl1, #btn-lock { display: none; }
+  #y-slider-strip, #overlay-xl1 { display: none; }
   .bottom-bar { display: none; }
   #sb-stats-mobile { display: block; }
 }
@@ -593,6 +629,7 @@ self.onmessage = function(ev) {
   <div class="canvas-area">
     <div class="canvas-wrap">
       <canvas id="field"></canvas>
+      <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
       <button id="btn-lock" title="Skalierung koppeln">🔓</button>
       <div id="y-slider-strip">
         <span class="ax-val" id="val-yl">4 λ</span>
@@ -1295,9 +1332,10 @@ function draw() {
     ctx.fillText(fmtTick(v), fx0 - 8, yp);
   });
   ctx.save();
-  ctx.translate(fx0 / 2, fy0 + fh / 2); ctx.rotate(-Math.PI / 2);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.translate(fx0 - 8, fy0 + 4);
+  ctx.rotate(-Math.PI / 2);
   ctx.font = `400 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.fillText('y / λ', 0, 0);
   ctx.restore();
 
@@ -1305,8 +1343,8 @@ function draw() {
   ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
 
   const SX       = FIELD_W + 1;
-  const AXIS_W   = 46;
-  const RIGHT_W  = 44;
+  const AXIS_W   = Math.min(46, Math.floor(SCREEN_W * 0.28));
+  const RIGHT_W  = SCREEN_W >= 150 ? 44 : 0;
   const CURVE_X0 = SX + AXIS_W + 1;
   const iPW      = SCREEN_W - AXIS_W - RIGHT_W - 2;
   const RIGHT_X0 = CURVE_X0 + iPW + 1;
@@ -1332,9 +1370,10 @@ function draw() {
     ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
   });
   ctx.save();
-  ctx.translate(SX + AXIS_W / 2, fy0 + fh / 2); ctx.rotate(-Math.PI / 2);
+  ctx.translate(SX + AXIS_W - 7, fy0 + 4);
+  ctx.rotate(-Math.PI / 2);
   ctx.font = `300 14px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.fillText('y / λ', 0, 0);
   ctx.restore();
   [0.25, 0.5, 0.75, 1.0].forEach(f => {
@@ -1421,21 +1460,23 @@ function draw() {
     ? Math.abs(y2Ticks[1] - y2Ticks[0]) : ylHalf) * lam / y2u.scale;
   const y2Dec = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(y2StepPhys) + 1e-30))), 4);
 
-  ctx.beginPath(); ctx.moveTo(RIGHT_X0, fy0); ctx.lineTo(RIGHT_X0, fy0 + fh);
-  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
+  if (RIGHT_W > 0) {
+    ctx.beginPath(); ctx.moveTo(RIGHT_X0, fy0); ctx.lineTo(RIGHT_X0, fy0 + fh);
+    ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
 
-  ctx.font = `300 14px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  y2Ticks.forEach(v => {
-    const yp = scrYpx(v);
-    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
-    ctx.beginPath(); ctx.moveTo(RIGHT_X0, yp); ctx.lineTo(RIGHT_X0 + 4, yp);
-    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
-    ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), RIGHT_X0 + 7, yp);
-  });
-  ctx.font = `300 14px 'DM Mono', monospace`;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.fillText(y2u.label, RIGHT_X0 + RIGHT_W / 2, fy0);
+    ctx.font = `300 14px 'DM Mono', monospace`;
+    ctx.fillStyle = AXIS; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    y2Ticks.forEach(v => {
+      const yp = scrYpx(v);
+      if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+      ctx.beginPath(); ctx.moveTo(RIGHT_X0, yp); ctx.lineTo(RIGHT_X0 + 4, yp);
+      ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+      ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), RIGHT_X0 + 7, yp);
+    });
+    ctx.font = `300 14px 'DM Mono', monospace`;
+    ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(y2u.label, RIGHT_X0 + RIGHT_W / 2, fy0);
+  }
 
   // ── Intensity panel legend (right-aligned, right 2/3 of plot) ──────────────
   ctx.font = `300 18px 'DM Mono', monospace`;
@@ -1831,6 +1872,21 @@ document.body.classList.add('light');
 buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); syncLoadBarSpeed(); workerInit();
 // reflect initial lock state on button
 { const b = document.getElementById('btn-lock'); b.textContent = '🔒'; b.classList.add('active'); }
+
+// Sidebar toggle for mobile landscape
+document.getElementById('btn-sidebar-toggle').addEventListener('click', () => {
+  document.querySelector('.sidebar').classList.toggle('mobile-open');
+});
+// Close sidebar when tapping outside it on mobile
+document.addEventListener('touchstart', e => {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar.classList.contains('mobile-open')) return;
+  const toggle = document.getElementById('btn-sidebar-toggle');
+  if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+    sidebar.classList.remove('mobile-open');
+  }
+}, { passive: true });
+
 requestAnimationFrame(render);
 // Apply initial dipole UI state after all variables are declared
 document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
