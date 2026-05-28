@@ -60,28 +60,23 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .header-title em     { font-style: italic; color: var(--gold); }
 .load-area {
   flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 3px;
-  opacity: 0; transition: opacity .2s;
 }
-.load-area.active { opacity: 1; }
 .load-bar-wrap {
-  height: 4px; border-radius: 2px;
+  height: 3px; border-radius: 2px;
   background: var(--border); overflow: hidden;
 }
 .load-bar {
-  height: 100%; width: 40%; border-radius: 2px;
+  height: 100%; width: 0%; border-radius: 2px;
   background: var(--gold);
-  animation: loadslide 2s linear infinite;
 }
 .load-text {
   font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em;
   color: var(--text-dim); text-align: center;
   opacity: 0; pointer-events: none; user-select: none;
 }
-/* reloading state: pause slide, show static bar, blink text */
+/* reloading state: static full bar + blinking text */
 .load-area.reloading .load-bar {
-  animation: none;
-  width: 100%; transform: none;
-  opacity: 0.35;
+  width: 100% !important; transform: none; opacity: 0.35;
 }
 .load-area.reloading .load-text {
   animation: blink 1.4s ease-in-out infinite;
@@ -1017,7 +1012,11 @@ function render(ts) {
 
   const dt = lastTs === null ? 0 : Math.min((ts - lastTs) / 1000, 0.05);
   lastTs = ts;
-  if (!isPaused) simTime += dt * animSpeed;
+  if (!isPaused) {
+    simTime += dt * animSpeed;
+    if (XL1 > 0 && !_loadArea.classList.contains('reloading'))
+      _loadBarEl.style.width = ((simTime % XL1) / XL1 * 100).toFixed(2) + '%';
+  }
 
   let Ez;
   if (isDipolMode) {
@@ -1256,6 +1255,16 @@ function draw() {
   const fy0  = XAXIS_TOP_H;
   _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
   updateAxisSliders();
+  // Align progress bar with field area
+  { const la = document.getElementById('load-area');
+    const wrap = document.querySelector('.load-bar-wrap');
+    if (la && wrap) {
+      const cl = canvas.getBoundingClientRect().left;
+      const lr = la.getBoundingClientRect();
+      wrap.style.marginLeft  = Math.max(0, cl + fx0 - lr.left).toFixed(0) + 'px';
+      wrap.style.marginRight = Math.max(0, lr.right - (cl + fx0 + fw)).toFixed(0) + 'px';
+    }
+  }
 
   const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
   const PANEL  = isLight ? '#f0f2f8' : '#13151b';
@@ -1856,14 +1865,11 @@ const _loadBarEl = document.getElementById('load-bar');
 let   _lastParamKey = null;
 
 function setLoading(on, reloading) {
-  _loadArea.classList.toggle('active', on);
   _loadArea.classList.toggle('reloading', on && !!reloading);
 }
 function completeLoading() { setLoading(false); }
 
-function syncLoadBarSpeed() {
-  _loadBarEl.style.animationDuration = (1 / animSpeed).toFixed(3) + 's';
-}
+function syncLoadBarSpeed() { /* speed now controls simTime rate, bar tracks phase */ }
 
 function _paramKey() {
   return f0 + '|' + d_m + '|' + N_SRC + '|' +
