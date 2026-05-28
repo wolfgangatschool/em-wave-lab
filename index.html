@@ -62,7 +62,6 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 }
 #btn-play {
   position: absolute; top: 0; z-index: 1;
-  transform: none;
 }
 #btn-timeavg {
   position: absolute; z-index: 10;
@@ -1362,6 +1361,13 @@ function draw() {
       const lr = la.getBoundingClientRect();
       wrap.style.marginLeft  = Math.max(0, cl + fx0 - lr.left).toFixed(0) + 'px';
       wrap.style.marginRight = '0px';
+      // Push bar down so its centre aligns with play button centre and c-slider track.
+      // marginTop = (btnHeight - barHeight) / 2 is the exact fixed point where
+      // bar centre == button centre regardless of canvas-top-bar total height.
+      const btnPlay2 = document.getElementById('btn-play');
+      if (btnPlay2) {
+        wrap.style.marginTop = Math.round((btnPlay2.offsetHeight - 3) / 2) + 'px';
+      }
     }
     if (ca) ca.style.width = SCREEN_W + 'px';
     // Align play button: on desktop left edge = y-slider left; on mobile anchor to load-area start
