@@ -329,6 +329,9 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   /* Canvas + top bar fill full viewport height */
   .app { height: 100vh; }
 
+  /* Lift slider away from phone bottom edge */
+  .canvas-area { padding-bottom: max(18px, env(safe-area-inset-bottom, 18px)); }
+
   /* Sidebar toggle — show as flex item in canvas-top-bar, left of play button */
   #btn-sidebar-toggle {
     display: flex; align-items: center; justify-content: center;
@@ -720,7 +723,7 @@ function niceTickStep(range, targetCount) {
 }
 function fmtTick(v) {
   if (v === 0) return '0';
-  if (Math.abs(v) >= 1e4) return v.toExponential(1).replace(/\.0(e)/, '$1').replace('e+', 'e');
+  if (Math.abs(v) >= 1e3) return v.toExponential(1).replace(/\.0(e)/, '$1').replace('e+', 'e');
   return String(parseFloat(v.toPrecision(10)));
 }
 function fmtLam(v) {
@@ -1242,7 +1245,7 @@ function draw() {
 
   const W = cssW, H = cssH;
   const isMob      = W < 900;
-  const XAXIS2_H   = isMob ? 38 : 52;
+  const XAXIS2_H   = isMob ? 52 : 52;
   const FH = H - XAXIS2_H;
   const SCREEN_W   = Math.max(isMob ? 160 : 100, Math.round(W * (isMob ? 0.27 : 0.20)));
   const FIELD_W    = W - SCREEN_W - 1;
