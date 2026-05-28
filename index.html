@@ -1364,13 +1364,14 @@ function draw() {
       wrap.style.marginRight = '0px';
     }
     if (ca) ca.style.width = SCREEN_W + 'px';
-    // Align play button: left edge = y-slider-strip left, top edge = progress bar top
+    // Align play button: on desktop left edge = y-slider left; on mobile anchor to load-area start
     const btnPlay = document.getElementById('btn-play');
     const strip   = document.getElementById('y-slider-strip');
     if (btnPlay && strip && la) {
       const sl = strip.getBoundingClientRect();
       const ll = la.getBoundingClientRect();
-      btnPlay.style.left = Math.max(0, sl.left - ll.left).toFixed(0) + 'px';
+      const desiredLeft = sl.left - ll.left;
+      btnPlay.style.left = (isMob ? Math.max(4, desiredLeft) : Math.max(0, desiredLeft)).toFixed(0) + 'px';
     }
     const btnTa = document.getElementById('btn-timeavg');
     if (btnTa) {
