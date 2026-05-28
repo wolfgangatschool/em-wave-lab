@@ -60,10 +60,7 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   display: flex; align-items: flex-end; flex-shrink: 0;
   padding-top: 6px;
 }
-#btn-play {
-  flex-shrink: 0;
-  margin-left: calc((var(--yaxis-w, 54px) - 28px) / 2);
-}
+#btn-play { flex-shrink: 0; }
 .load-area {
   flex: 1; position: relative; display: flex; flex-direction: column; gap: 2px;
   padding: 0 0 12px;
@@ -82,6 +79,28 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   color: var(--text-dim); text-align: center;
   opacity: 0; pointer-events: none; user-select: none;
 }
+/* ── Play + tempo control aligned over intensity panel ─────────────── */
+.ctrl-area {
+  flex-shrink: 0;
+  display: flex; align-items: flex-end; gap: 4px;
+  padding: 0 6px;
+  overflow: hidden;
+}
+.tempo-area {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.tempo-area input[type=range] {
+  width: 100%; -webkit-appearance: none; appearance: none;
+  color: var(--text-dim); touch-action: none;
+  margin-bottom: calc(12px + var(--sl-track) / 2 - var(--sl-thumb) / 2);
+}
+.tempo-val {
+  font: 300 10px 'DM Mono', monospace;
+  color: var(--text-dim); letter-spacing: .04em; white-space: nowrap;
+  text-align: center;
+}
+
 /* reloading state: static full bar + blinking text */
 .load-area.reloading .load-bar {
   width: 100% !important; transform: none; opacity: 0.35;
@@ -215,7 +234,7 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 
 /* ── Axis-range sliders ───────────────────────────────────────────── */
 :root { --sl-track: 3px; --sl-thumb: 14px; }
-@media (max-width: 600px) { :root { --sl-track: 5px; --sl-thumb: 20px; } }
+@media (max-width: 900px) { :root { --sl-track: 5px; --sl-thumb: 20px; } }
 
 #y-slider-strip {
   position: absolute; left: 8px; top: 0;
@@ -263,6 +282,7 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 #y-slider-strip input[type="range"],
 #overlay-xl1   input[type="range"] {
   -webkit-appearance: none; appearance: none; background: transparent;
+  touch-action: none;
 }
 
 /* ── horizontal (x-max): thickness = height ── */
@@ -343,11 +363,14 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   }
   #btn-sidebar-toggle:hover { opacity: 1; }
 
-  /* Play button: no YAXIS_W centering margin on mobile — sits right of sidebar toggle */
-  #btn-play { margin-left: 4px; width: 26px; height: 26px; font-size: 13px; }
+  /* Play button: sized to match sidebar toggle */
+  #btn-play { width: 26px; height: 26px; font-size: 13px; }
 
   /* Lock button: same height as play button on mobile */
   #btn-lock { height: 26px; padding: 0 7px; font-size: 12px; }
+
+  /* ctrl-area: tighter padding on mobile */
+  .ctrl-area { padding: 0 4px; gap: 3px; }
 }
 
 /* ── Portrait: rotate prompt ─────────────────────────────────────── */
@@ -604,13 +627,6 @@ self.onmessage = function(ev) {
         </div>
         <input type="range" id="sl-scr" min="1" max="10" value="10" step="0.5">
       </div>
-      <div class="slider-group" style="color:var(--text-dim)">
-        <div class="slider-label">
-          <span class="pname">Tempo</span>
-          <span class="pval" id="val-speed">0.5 T/s</span>
-        </div>
-        <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
-      </div>
     </div>
 
     <div class="sb-group">
@@ -662,10 +678,16 @@ self.onmessage = function(ev) {
   <div class="canvas-area">
     <div class="canvas-top-bar">
       <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
-      <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
       <div class="load-area" id="load-area">
         <div class="load-text" id="load-text">reloading…</div>
         <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+      </div>
+      <div class="ctrl-area" id="ctrl-area">
+        <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
+        <div class="tempo-area">
+          <span class="tempo-val" id="val-tempo-top">c/12G</span>
+          <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
+        </div>
       </div>
     </div>
     <div class="canvas-wrap">
@@ -730,6 +752,20 @@ function fmtLam(v) {
   if (v >= 1e4) return fmtTick(v) + ' λ';
   const r = Math.round(v * 10) / 10;
   return (r % 1 === 0 ? String(r) : r.toFixed(1)) + ' λ';
+}
+function updateTempoDisplay() {
+  const el = document.getElementById('val-tempo-top');
+  if (!el || !f0 || !animSpeed) return;
+  const factor = f0 / animSpeed;
+  const PFXS = [{v:1e12,s:'T'},{v:1e9,s:'G'},{v:1e6,s:'M'},{v:1e3,s:'k'}];
+  for (const {v, s} of PFXS) {
+    if (factor >= v * 0.5) {
+      const n = factor / v;
+      el.textContent = 'c / ' + (n < 10 ? n.toFixed(1) : n.toFixed(0)) + s;
+      return;
+    }
+  }
+  el.textContent = 'c/' + factor.toFixed(0);
 }
 
 function makeYTicks(half, includeZero) {
@@ -1260,15 +1296,17 @@ function draw() {
   const fy0  = XAXIS_TOP_H;
   _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
   updateAxisSliders();
-  // Align progress bar with field area
+  // Align progress bar with field area; ctrl-area width matches intensity panel
   { const la = document.getElementById('load-area');
+    const ca = document.getElementById('ctrl-area');
     const wrap = document.querySelector('.load-bar-wrap');
     if (la && wrap) {
       const cl = canvas.getBoundingClientRect().left;
       const lr = la.getBoundingClientRect();
       wrap.style.marginLeft  = Math.max(0, cl + fx0 - lr.left).toFixed(0) + 'px';
-      wrap.style.marginRight = Math.max(0, lr.right - (cl + fx0 + fw)).toFixed(0) + 'px';
+      wrap.style.marginRight = '0px';
     }
+    if (ca) ca.style.width = SCREEN_W + 'px';
   }
 
   const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
@@ -1409,7 +1447,7 @@ function draw() {
   const iPW      = SCREEN_W - AXIS_W - RIGHT_W - 2;
   const RIGHT_X0 = CURVE_X0 + iPW + 1;
 
-  ctx.fillStyle = PANEL;
+  ctx.fillStyle = BG;
   ctx.fillRect(SX, 0, SCREEN_W, H);
 
   ctx.beginPath();
@@ -1709,6 +1747,7 @@ function onFreqChange() {
   }
   readGlobals();
   updateF0Display();
+  updateTempoDisplay();
 }
 
 const _slF0 = document.getElementById('sl-f0');
@@ -1862,7 +1901,7 @@ document.getElementById('chk-bfield').addEventListener('change', e => { showBFie
 
 document.getElementById('sl-speed').addEventListener('input', () => {
   animSpeed = Number(document.getElementById('sl-speed').value) * 0.1;
-  document.getElementById('val-speed').textContent = animSpeed.toFixed(1) + ' T/s';
+  updateTempoDisplay();
   syncLoadBarSpeed();
 });
 
@@ -1938,7 +1977,7 @@ function workerInit() {
 }
 
 document.body.classList.add('light');
-buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); syncLoadBarSpeed(); workerInit();
+buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisplay(); syncLoadBarSpeed(); workerInit();
 // reflect initial lock state on button
 { const b = document.getElementById('btn-lock'); b.textContent = 'X=Y'; b.classList.add('active'); }
 
