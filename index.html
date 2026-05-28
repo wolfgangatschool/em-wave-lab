@@ -57,13 +57,28 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   flex-shrink: 0; margin-right: 4px;
 }
 .canvas-top-bar {
-  display: flex; align-items: flex-end; flex-shrink: 0;
-  padding-top: 6px;
+  display: flex; align-items: center; flex-shrink: 0;
+  padding: 4px 0;
 }
-#btn-play { flex-shrink: 0; }
+#btn-play {
+  position: absolute; top: 0; z-index: 1;
+  transform: none;
+}
+#btn-timeavg {
+  position: absolute; z-index: 10;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 28px; padding: 0 8px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
+}
+#btn-timeavg:hover { opacity: 1; }
+#btn-timeavg.active {
+  color: var(--gold); border-color: var(--gold); opacity: 1;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
 .load-area {
-  flex: 1; position: relative; display: flex; flex-direction: column; gap: 2px;
-  padding: 0 0 12px;
+  flex: 1; position: relative;
 }
 .load-bar-wrap {
   height: 3px; border-radius: 2px;
@@ -79,12 +94,13 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   color: var(--text-dim); text-align: center;
   opacity: 0; pointer-events: none; user-select: none;
 }
-/* ── Play + tempo control aligned over intensity panel ─────────────── */
+/* ── Play + tempo control group ────────────────────────────────────── */
 .ctrl-area {
   flex-shrink: 0;
-  display: flex; align-items: flex-end; gap: 4px;
-  padding: 0 6px;
-  overflow: hidden;
+  display: flex; align-items: center;
+  overflow: visible;
+  margin-left: 8px;
+  width: 20%;
 }
 .tempo-area {
   flex: 1; min-width: 0;
@@ -93,7 +109,6 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .tempo-area input[type=range] {
   width: 100%; -webkit-appearance: none; appearance: none;
   color: var(--text-dim); touch-action: none;
-  margin-bottom: calc(12px + var(--sl-track) / 2 - var(--sl-thumb) / 2);
 }
 .tempo-val {
   font: 300 10px 'DM Mono', monospace;
@@ -365,12 +380,13 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 
   /* Play button: sized to match sidebar toggle */
   #btn-play { width: 26px; height: 26px; font-size: 13px; }
+  #btn-timeavg { font-size: 11px; height: 24px; }
 
   /* Lock button: same height as play button on mobile */
   #btn-lock { height: 26px; padding: 0 7px; font-size: 12px; }
 
-  /* ctrl-area: tighter padding on mobile */
-  .ctrl-area { padding: 0 4px; gap: 3px; }
+  /* ctrl-area: tighter gap on mobile */
+  .ctrl-area { gap: 3px; }
 }
 
 /* ── Portrait: rotate prompt ─────────────────────────────────────── */
@@ -679,13 +695,13 @@ self.onmessage = function(ev) {
     <div class="canvas-top-bar">
       <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
       <div class="load-area" id="load-area">
+        <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
         <div class="load-text" id="load-text">reloading…</div>
         <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
       </div>
       <div class="ctrl-area" id="ctrl-area">
-        <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
         <div class="tempo-area">
-          <span class="tempo-val" id="val-tempo-top">c/12G</span>
+          <span class="tempo-val" id="val-tempo-top"></span>
           <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
         </div>
       </div>
@@ -701,6 +717,7 @@ self.onmessage = function(ev) {
         <input type="range" id="sl-xl1" min="1" max="100" value="12" step="1">
         <span class="ax-val" id="val-xl1">12 λ</span>
       </div>
+      <button id="btn-timeavg">Zeitgemittelt</button>
     </div>
   </div>
 
@@ -743,9 +760,21 @@ function niceTickStep(range, targetCount) {
   const mult  = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
   return mult * exp;
 }
+const _SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+function toSup(n) {
+  return String(Math.abs(n)).replace(/\d/g, d => _SUP[+d]);
+}
+function toSci(v) {
+  if (v === 0) return '0';
+  const neg = v < 0, a = Math.abs(v);
+  const e = Math.floor(Math.log10(a));
+  const m = a / Math.pow(10, e);
+  const ms = (parseFloat(m.toFixed(1))) + '';
+  return (neg ? '−' : '') + ms + '×10' + (e < 0 ? '⁻' : '') + toSup(e);
+}
 function fmtTick(v) {
   if (v === 0) return '0';
-  if (Math.abs(v) >= 1e3) return v.toExponential(1).replace(/\.0(e)/, '$1').replace('e+', 'e');
+  if (Math.abs(v) >= 1e3) return toSci(v);
   return String(parseFloat(v.toPrecision(10)));
 }
 function fmtLam(v) {
@@ -757,15 +786,13 @@ function updateTempoDisplay() {
   const el = document.getElementById('val-tempo-top');
   if (!el || !f0 || !animSpeed) return;
   const factor = f0 / animSpeed;
-  const PFXS = [{v:1e12,s:'T'},{v:1e9,s:'G'},{v:1e6,s:'M'},{v:1e3,s:'k'}];
-  for (const {v, s} of PFXS) {
-    if (factor >= v * 0.5) {
-      const n = factor / v;
-      el.textContent = 'c / ' + (n < 10 ? n.toFixed(1) : n.toFixed(0)) + s;
-      return;
-    }
-  }
-  el.textContent = 'c/' + factor.toFixed(0);
+  const cSim   = C_LIGHT / factor;
+  const ef = Math.floor(Math.log10(Math.abs(factor)));
+  const mf = parseFloat((factor / Math.pow(10, ef)).toFixed(1));
+  const ec = Math.floor(Math.log10(Math.abs(cSim)));
+  const mc = parseFloat((cSim   / Math.pow(10, ec)).toFixed(2));
+  el.innerHTML = 'c<sub>sim</sub> = c / ' + mf + '×10<sup>' + ef + '</sup>'
+               + ' = ' + mc + '×10<sup>' + ec + '</sup> m/s';
 }
 
 function makeYTicks(half, includeZero) {
@@ -812,6 +839,11 @@ const R_mat = new Float64Array(100 * NX * NY);
 const screenAcc   = new Float64Array(NY);  // EMA of Ez² → time-average ≈ ½A²
 const screenInst  = new Float64Array(NY);  // instantaneous Ez² for blue curve
 const SCREEN_DECAY = 0.05;
+
+const acc2D = new Float32Array(NX * NY);
+const rEff  = new Float32Array(NX * NY);
+const ACC2D_DECAY = 0.05;
+let showTimeAvg = false;
 
 let simTime = 0;
 let lastTs  = null;
@@ -975,7 +1007,11 @@ function recompute() {
       }
     }
   }
+  for (let i = 0; i < NX; i++)
+    for (let j = 0; j < NY; j++)
+      rEff[i*NY+j] = Math.sqrt(xGrid[i]*xGrid[i] + yGrid[j]*yGrid[j]) + 1e-10;
   screenAcc.fill(0);
+  acc2D.fill(0);
   updateStats();
 }
 
@@ -1066,15 +1102,36 @@ function render(ts) {
     Ez = (wsActive && wsLatestEz) ? wsLatestEz : computeField(simTime * T_per);
   }
 
+  if (!isPaused)
+    for (let k = 0; k < NX * NY; k++)
+      acc2D[k] = acc2D[k] * (1 - ACC2D_DECAY) + Ez[k] * Ez[k] * ACC2D_DECAY;
+
   const px = imgData.data;
-  let s2 = 0;
-  for (let k = 0; k < Ez.length; k++) s2 += Ez[k] * Ez[k];
-  const scale = 1 / (Math.sqrt(s2 / Ez.length) * 4 + 1e-30);
-  for (let i = 0; i < NX; i++) {
-    for (let j = 0; j < NY; j++) {
-      const rgb = cmRGB(Math.tanh(Ez[i*NY+j] * scale));
-      const idx = ((NY - 1 - j) * NX + i) * 4;
-      px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+  if (showTimeAvg) {
+    const rRef = lam || 1;
+    let s2 = 0;
+    for (let k = 0; k < NX * NY; k++) s2 += acc2D[k];
+    const scale = 1 / (Math.sqrt(s2 / (NX * NY)) * 4 + 1e-30);
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const k = i * NY + j;
+        const rComp = Math.sqrt(rEff[k] / rRef);
+        const val = Math.sign(Ez[k]) * Math.sqrt(acc2D[k]) * rComp;
+        const rgb = cmRGB(Math.tanh(val * scale));
+        const idx = ((NY - 1 - j) * NX + i) * 4;
+        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+      }
+    }
+  } else {
+    let s2 = 0;
+    for (let k = 0; k < Ez.length; k++) s2 += Ez[k] * Ez[k];
+    const scale = 1 / (Math.sqrt(s2 / Ez.length) * 4 + 1e-30);
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const rgb = cmRGB(Math.tanh(Ez[i*NY+j] * scale));
+        const idx = ((NY - 1 - j) * NX + i) * 4;
+        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+      }
     }
   }
   offCtx.putImageData(imgData, 0, 0);
@@ -1296,7 +1353,7 @@ function draw() {
   const fy0  = XAXIS_TOP_H;
   _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
   updateAxisSliders();
-  // Align progress bar with field area; ctrl-area width matches intensity panel
+  // Align progress bar with field columns; ctrl-area with intensity panel columns
   { const la = document.getElementById('load-area');
     const ca = document.getElementById('ctrl-area');
     const wrap = document.querySelector('.load-bar-wrap');
@@ -1307,6 +1364,21 @@ function draw() {
       wrap.style.marginRight = '0px';
     }
     if (ca) ca.style.width = SCREEN_W + 'px';
+    // Align play button: left edge = y-slider-strip left, top edge = progress bar top
+    const btnPlay = document.getElementById('btn-play');
+    const strip   = document.getElementById('y-slider-strip');
+    if (btnPlay && strip && la) {
+      const sl = strip.getBoundingClientRect();
+      const ll = la.getBoundingClientRect();
+      btnPlay.style.left = Math.max(0, sl.left - ll.left).toFixed(0) + 'px';
+    }
+    const btnTa = document.getElementById('btn-timeavg');
+    if (btnTa) {
+      const SX = FIELD_W + 1;
+      btnTa.style.left = (SX + SCREEN_W / 2).toFixed(0) + 'px';
+      btnTa.style.transform = 'translateX(-50%)';
+      btnTa.style.bottom = (XAXIS2_H / 2 - btnTa.offsetHeight / 2).toFixed(0) + 'px';
+    }
   }
 
   const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
@@ -1706,9 +1778,9 @@ function syncRows() {
 }
 
 selSrc.addEventListener('change', () => { selectedSrc = Number(selSrc.value); syncRows(); });
-slSrcA.addEventListener('input', () => { srcs[selectedSrc].amp   = slSrcA.value / 100; vlSrcA.textContent = (slSrcA.value / 100).toFixed(2);                  screenAcc.fill(0); });
-slSrcF.addEventListener('input', () => { srcs[selectedSrc].fmul  = slSrcF.value / 100; vlSrcF.textContent = (slSrcF.value / 100).toFixed(2) + '×';            screenAcc.fill(0); });
-slSrcP.addEventListener('input', () => { srcs[selectedSrc].phase = (slSrcP.value / 100) * Math.PI; vlSrcP.textContent = (slSrcP.value / 100).toFixed(2) + 'π'; screenAcc.fill(0); });
+slSrcA.addEventListener('input', () => { srcs[selectedSrc].amp   = slSrcA.value / 100; vlSrcA.textContent = (slSrcA.value / 100).toFixed(2);                  screenAcc.fill(0); acc2D.fill(0); });
+slSrcF.addEventListener('input', () => { srcs[selectedSrc].fmul  = slSrcF.value / 100; vlSrcF.textContent = (slSrcF.value / 100).toFixed(2) + '×';            screenAcc.fill(0); acc2D.fill(0); });
+slSrcP.addEventListener('input', () => { srcs[selectedSrc].phase = (slSrcP.value / 100) * Math.PI; vlSrcP.textContent = (slSrcP.value / 100).toFixed(2) + 'π'; screenAcc.fill(0); acc2D.fill(0); });
 
 function readGlobals() {
   const newN = Number(document.getElementById('sl-N').value);
@@ -1892,12 +1964,17 @@ document.getElementById('sl-scr').addEventListener('input', () => {
   screenOverride = true;
   screenLam = Number(document.getElementById('sl-scr').value);
   document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
-  screenAcc.fill(0);
+  screenAcc.fill(0); acc2D.fill(0);
   updateStats();
 });
 
 document.getElementById('chk-efield').addEventListener('change', e => { showEField = e.target.checked; });
 document.getElementById('chk-bfield').addEventListener('change', e => { showBField = e.target.checked; });
+document.getElementById('btn-timeavg').addEventListener('click', () => {
+  showTimeAvg = !showTimeAvg;
+  acc2D.fill(0);
+  document.getElementById('btn-timeavg').classList.toggle('active', showTimeAvg);
+});
 
 document.getElementById('sl-speed').addEventListener('input', () => {
   animSpeed = Number(document.getElementById('sl-speed').value) * 0.1;
