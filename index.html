@@ -248,8 +248,10 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 #btn-lock {
   position: absolute; left: 4px; bottom: 15px; z-index: 10;
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px; padding: 2px 6px;
-  cursor: pointer; opacity: 0.6; line-height: 1.4; letter-spacing: 0.02em;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 28px; padding: 0 6px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
 }
 #btn-lock:hover { opacity: 1; }
 #btn-lock.active {
@@ -341,8 +343,8 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   /* Play button: no YAXIS_W centering margin on mobile — sits right of sidebar toggle */
   #btn-play { margin-left: 4px; width: 26px; height: 26px; font-size: 13px; }
 
-  /* Lock button: slightly larger for touch */
-  #btn-lock { font-size: 14px; padding: 3px 7px; }
+  /* Lock button: same height as play button on mobile */
+  #btn-lock { height: 26px; padding: 0 7px; font-size: 12px; }
 }
 
 /* ── Portrait: rotate prompt ─────────────────────────────────────── */
@@ -1246,9 +1248,9 @@ function draw() {
   const FIELD_W    = W - SCREEN_W - 1;
   const xTickStep  = niceTickStep(XL1, 6);
 
-  const YAXIS_W     = isMob ? 40 : 54;
+  const YAXIS_W     = isMob ? 50 : 64;
   document.documentElement.style.setProperty('--yaxis-w', YAXIS_W + 'px');
-  const XAXIS_TOP_H = isMob ? 22 : 28;
+  const XAXIS_TOP_H = isMob ? 28 : 34;
   const fw   = FIELD_W - YAXIS_W;
   const fh   = FH - XAXIS_TOP_H;
   const fx0  = YAXIS_W;
@@ -1375,12 +1377,16 @@ function draw() {
   ctx.textAlign = 'right';
   ctx.fillText('x / λ', fx0 + fw, fy0 + fh + 6);
 
-  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   makeYTicks(ylHalf, false).forEach(v => {
     const yp = yPx(v);
     if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
     ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 - 5, yp); ctx.stroke();
-    ctx.fillText(fmtTick(v), fx0 - 8, yp);
+    ctx.save();
+    ctx.translate(fx0 - 7, yp);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(fmtTick(v), 0, 0);
+    ctx.restore();
   });
   ctx.save();
   ctx.translate(fx0 - 8, fy0 + 4);
@@ -1409,14 +1415,19 @@ function draw() {
 
   const scrYpx = v => fy0 + (1 - (v - YL0) / (YL1 - YL0)) * fh;
   ctx.font = fTick;
-  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = AXIS;
   ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
   makeYTicks(ylHalf, true).forEach(v => {
     const yp = scrYpx(v);
     if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
     ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
     ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
-    ctx.fillText(fmtTick(v), SX + AXIS_W - 7, yp);
+    ctx.save();
+    ctx.translate(SX + AXIS_W - 6, yp);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(fmtTick(v), 0, 0);
+    ctx.restore();
     ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(RIGHT_X0, yp);
     ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
   });
@@ -1516,13 +1527,18 @@ function draw() {
     ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
 
     ctx.font = fTick;
-    ctx.fillStyle = AXIS; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = AXIS;
     y2Ticks.forEach(v => {
       const yp = scrYpx(v);
       if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
       ctx.beginPath(); ctx.moveTo(RIGHT_X0, yp); ctx.lineTo(RIGHT_X0 + 4, yp);
       ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
-      ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), RIGHT_X0 + 7, yp);
+      ctx.save();
+      ctx.translate(RIGHT_X0 + 7, yp);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), 0, 0);
+      ctx.restore();
     });
     ctx.font = fTick;
     ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
