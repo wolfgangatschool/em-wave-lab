@@ -1241,14 +1241,15 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const W = cssW, H = cssH;
-  const XAXIS2_H = 52;
+  const isMob      = W < 900;
+  const XAXIS2_H   = isMob ? 38 : 52;
   const FH = H - XAXIS2_H;
-  const SCREEN_W = Math.max(100, Math.round(W * 0.20));
-  const FIELD_W  = W - SCREEN_W - 1;
-  const xTickStep = niceTickStep(XL1, 6);
+  const SCREEN_W   = Math.max(isMob ? 160 : 100, Math.round(W * (isMob ? 0.27 : 0.20)));
+  const FIELD_W    = W - SCREEN_W - 1;
+  const xTickStep  = niceTickStep(XL1, 6);
 
-  const YAXIS_W     = 54;
-  const XAXIS_TOP_H = 28;
+  const YAXIS_W     = isMob ? 40 : 54;
+  const XAXIS_TOP_H = isMob ? 22 : 28;
   const fw   = FIELD_W - YAXIS_W;
   const fh   = FH - XAXIS_TOP_H;
   const fx0  = YAXIS_W;
@@ -1263,6 +1264,11 @@ function draw() {
   const GRID   = isLight ? '#d0d4e0' : '#222838';
   const CYAN   = isLight ? '#1a7fb5' : '#6ed0ff';
   const GOLD   = isLight ? '#a07020' : '#d4a85a';
+
+  const fTick  = `300 ${isMob ? 11 : 14}px 'DM Mono', monospace`;
+  const fTickB = `400 ${isMob ? 11 : 14}px 'DM Mono', monospace`;
+  const fLgnd  = `300 ${isMob ? 13 : 18}px 'DM Mono', monospace`;
+  const fSub   = `300 ${isMob ? 10 : 12}px 'DM Mono', monospace`;
 
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
@@ -1292,7 +1298,7 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(xRFF, fy0); ctx.lineTo(xRFF, fy0 + fh);
     ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 5;
     ctx.setLineDash([8, 8]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.font = `400 14px 'DM Mono', monospace`;
+    ctx.font = fTickB;
     ctx.fillStyle = GOLD;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText('Fernfeld', xRFF + 6, fy0 + 4);
@@ -1302,7 +1308,7 @@ function draw() {
     drawStreamlines(ctx, wsLatestBx, wsLatestBy, fx0, fy0, fw, fh);
   }
 
-  ctx.font = `400 14px 'DM Mono', monospace`;
+  ctx.font = fTickB;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   if (!isDipolMode && !wsLatestBx) {
     ctx.fillStyle = isLight ? '#1a7fb5cc' : '#6ed0ffcc';
@@ -1341,7 +1347,7 @@ function draw() {
     }
   }
 
-  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.font = fTick;
   ctx.fillStyle = AXIS; ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7;
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.beginPath(); ctx.moveTo(fx0, fy0 + fh); ctx.lineTo(fx0, fy0 + fh + 5); ctx.stroke();
@@ -1366,7 +1372,7 @@ function draw() {
   ctx.save();
   ctx.translate(fx0 - 8, fy0 + 4);
   ctx.rotate(-Math.PI / 2);
-  ctx.font = `400 14px 'DM Mono', monospace`;
+  ctx.font = fTickB;
   ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.fillText('y / λ', 0, 0);
   ctx.restore();
@@ -1375,8 +1381,8 @@ function draw() {
   ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
 
   const SX       = FIELD_W + 1;
-  const AXIS_W   = Math.min(46, Math.floor(SCREEN_W * 0.28));
-  const RIGHT_W  = SCREEN_W >= 150 ? 44 : 0;
+  const AXIS_W   = Math.min(isMob ? 36 : 46, Math.floor(SCREEN_W * 0.28));
+  const RIGHT_W  = SCREEN_W >= 150 ? (isMob ? 34 : 44) : 0;
   const CURVE_X0 = SX + AXIS_W + 1;
   const iPW      = SCREEN_W - AXIS_W - RIGHT_W - 2;
   const RIGHT_X0 = CURVE_X0 + iPW + 1;
@@ -1389,7 +1395,7 @@ function draw() {
   ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
 
   const scrYpx = v => fy0 + (1 - (v - YL0) / (YL1 - YL0)) * fh;
-  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.font = fTick;
   ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
   makeYTicks(ylHalf, true).forEach(v => {
@@ -1404,7 +1410,7 @@ function draw() {
   ctx.save();
   ctx.translate(SX + AXIS_W - 7, fy0 + 4);
   ctx.rotate(-Math.PI / 2);
-  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.font = fTick;
   ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.fillText('y / λ', 0, 0);
   ctx.restore();
@@ -1496,7 +1502,7 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(RIGHT_X0, fy0); ctx.lineTo(RIGHT_X0, fy0 + fh);
     ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
 
-    ctx.font = `300 14px 'DM Mono', monospace`;
+    ctx.font = fTick;
     ctx.fillStyle = AXIS; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     y2Ticks.forEach(v => {
       const yp = scrYpx(v);
@@ -1505,17 +1511,17 @@ function draw() {
       ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
       ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), RIGHT_X0 + 7, yp);
     });
-    ctx.font = `300 14px 'DM Mono', monospace`;
+    ctx.font = fTick;
     ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillText(y2u.label, RIGHT_X0 + RIGHT_W / 2, fy0);
   }
 
   // ── Intensity panel legend (right-aligned, right 2/3 of plot) ──────────────
-  ctx.font = `300 18px 'DM Mono', monospace`;
+  ctx.font = fLgnd;
   ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
   const RX  = RIGHT_X0 - 6;
-  const swL = 20, gap = 6, lh = 21;
-  const LY1 = fy0 + 14, LY2 = fy0 + 14 + lh + 4;
+  const swL = isMob ? 14 : 20, gap = isMob ? 4 : 6, lh = isMob ? 16 : 21;
+  const LY1 = fy0 + 10, LY2 = fy0 + 10 + lh + 4;
   // Blue: I(t)
   ctx.fillStyle = CYAN;
   ctx.fillText('I(t)', RX, LY1);
@@ -1529,7 +1535,7 @@ function draw() {
   ctx.beginPath(); ctx.moveTo(RX - tw2 - gap - swL, LY2); ctx.lineTo(RX - tw2 - gap, LY2);
   ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.font = `300 12px 'DM Mono', monospace`;
+  ctx.font = fSub;
   ctx.textAlign = 'left';
   ctx.fillText('(Fernfeld)', RX - tw2 - gap - swL, LY2 + lh);
 
@@ -1553,7 +1559,7 @@ function draw() {
   const x2Last  = Math.floor(x2Max / x2Step - 1e-9) * x2Step;
   const x2Dec   = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(x2Step)))), 4);
 
-  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.font = fTick;
   ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   for (let v = x2First; v <= x2Last + x2Step * 0.01; v += x2Step) {
     v = Math.round(v / (x2Step * 1e-6)) * x2Step * 1e-6;
