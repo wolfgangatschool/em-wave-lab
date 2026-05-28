@@ -190,9 +190,10 @@ select.src-select:focus { border-color: var(--text-dim); }
 .unit-btn {
   background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
-  padding: 1px 3px; cursor: pointer; transition: border-color .15s, color .15s;
+  padding: 1px 2px; cursor: pointer; transition: border-color .15s, color .15s;
   vertical-align: middle; line-height: 1.4; outline: none;
   -webkit-appearance: none; appearance: none;
+  width: 3.4ch;
 }
 .unit-btn:hover { border-color: var(--text-dim); color: var(--text-bright); }
 .unit-btn option { background: var(--panel); }
@@ -253,7 +254,7 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   color: var(--text-dim); white-space: nowrap;
 }
 #btn-lock {
-  position: absolute; left: 15px; transform: translateX(-50%); bottom: 8px; z-index: 10;
+  position: absolute; left: 4px; bottom: 15px; z-index: 10;
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px; padding: 2px 6px;
   cursor: pointer; opacity: 0.6; line-height: 1.4; letter-spacing: 0.02em;
