@@ -137,6 +137,14 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
 .slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
 .slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
+.slider-info {
+  display: grid; grid-template-columns: auto auto;
+  column-gap: 6px; row-gap: 1px; margin-top: 4px;
+  justify-content: start;
+}
+.slider-info .si-label { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); white-space: nowrap; text-align: right; }
+.slider-info .si-dim   { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); white-space: nowrap; text-align: right; }
+.slider-info .si-val   { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); display: flex; align-items: baseline; gap: 4px; }
 
 input[type=range] {
   -webkit-appearance: none; width: 100%; height: 2px;
@@ -537,11 +545,13 @@ self.onmessage = function(ev) {
           <input type="range" id="sl-N" min="1" max="100" value="2" step="1">
         </div>
         <div class="slider-group" id="sg-d" style="color:var(--blue)">
-          <div class="slider-label">
-            <span class="pname">Abstand (d) <select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
-            <span class="pval" id="val-d">360 mm · d/λ = 3.60</span>
-          </div>
           <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
+          <div class="slider-info">
+            <span class="si-label">Abstand d =</span>
+            <span class="si-val"><span id="val-d-phys">100</span><select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
+            <span class="si-dim">d/λ =</span>
+            <span class="si-val"><span id="val-d-lam">2.00</span></span>
+          </div>
         </div>
       </div>
       <div id="sg-dipole" style="display:none">
@@ -557,11 +567,13 @@ self.onmessage = function(ev) {
         </div>
       </div>
       <div class="slider-group" style="color:var(--gold)">
-        <div class="slider-label">
-          <span class="pname">Frequenz (f₀) <select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
-          <span class="pval" id="val-f0">3 GHz · λ = 10.0 cm</span>
-        </div>
         <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
+        <div class="slider-info">
+          <span class="si-label">Frequenz f₀ =</span>
+          <span class="si-val"><span id="val-f0-phys">6</span><select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
+          <span class="si-dim">λ =</span>
+          <span class="si-val"><span id="val-f0-lam">5.00 cm</span></span>
+        </div>
       </div>
     </div>
 
@@ -716,8 +728,9 @@ function niceTickStep(range, targetCount) {
   return mult * exp;
 }
 function fmtTick(v) {
+  if (v === 0) return '0';
   if (Math.abs(v) >= 1e4) return v.toExponential(1).replace(/\.0(e)/, '$1').replace('e+', 'e');
-  return String(v);
+  return String(parseFloat(v.toPrecision(10)));
 }
 function fmtLam(v) {
   if (v >= 1e4) return fmtTick(v) + ' λ';
@@ -728,8 +741,12 @@ function fmtLam(v) {
 function makeYTicks(half, includeZero) {
   const step = niceTickStep(2 * half, 6);
   const arr  = [];
-  for (let v = -Math.floor(half / step) * step; v <= half - step * 0.1; v += step) {
-    if (includeZero || Math.abs(v) > step * 0.1) arr.push(v);
+  const n0   = Math.floor(half / step + 1e-9);
+  for (let n = -n0; n <= n0; n++) {
+    const v = Math.round(n * step * 1e10) / 1e10;
+    if (Math.abs(v) > half + step * 0.01) continue;
+    if (!includeZero && n === 0) continue;
+    arr.push(v);
   }
   return arr;
 }
@@ -784,7 +801,8 @@ const imgData = offCtx.createImageData(NX, NY);
 let _layoutFx0 = 54, _layoutFw = 600, _layoutFy0 = 28, _layoutFh = 400;
 
 let _screenDragging = false;
-let _pinchStartDist = null, _pinchStartXL1 = 0, _pinchStartYlHalf = 0;
+let _pinchStartDist = null, _pinchStartDx = 0, _pinchStartDy = 0;
+let _pinchStartXL1 = 0, _pinchStartYlHalf = 0;
 
 canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
@@ -821,7 +839,9 @@ canvas.addEventListener('mouseleave', () => { _screenDragging = false; });
 canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     const t = e.touches;
-    _pinchStartDist   = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+    _pinchStartDx     = t[1].clientX - t[0].clientX;
+    _pinchStartDy     = t[1].clientY - t[0].clientY;
+    _pinchStartDist   = Math.hypot(_pinchStartDx, _pinchStartDy);
     _pinchStartXL1    = XL1;
     _pinchStartYlHalf = ylHalf;
     _screenDragging   = false;
@@ -841,15 +861,24 @@ canvas.addEventListener('touchmove', e => {
   if (e.touches.length === 2 && _pinchStartDist !== null) {
     e.preventDefault();
     const t = e.touches;
-    const dist  = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
-    const scale = _pinchStartDist / dist;
+    const dx = t[1].clientX - t[0].clientX;
+    const dy = t[1].clientY - t[0].clientY;
     const slXl1 = document.getElementById('sl-xl1');
     const slYl  = document.getElementById('sl-yl');
-    XL1      = Math.max(1, Math.min(Number(slXl1.max), _pinchStartXL1 * scale));
-    xPhysMax = XL1 * lam;
-    ylHalf   = scaleLocked
-      ? Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)))
-      : Math.max(1, Math.min(Number(slYl.max), _pinchStartYlHalf * scale));
+    if (scaleLocked) {
+      const scale = _pinchStartDist / Math.hypot(dx, dy);
+      XL1    = Math.max(1, Math.min(Number(slXl1.max), _pinchStartXL1 * scale));
+      ylHalf = Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)));
+    } else {
+      // Independent axes: horizontal spread → X range, vertical spread → Y range
+      const scaleX = Math.abs(_pinchStartDx) > 5
+        ? Math.abs(_pinchStartDx) / Math.max(Math.abs(dx), 5) : 1;
+      const scaleY = Math.abs(_pinchStartDy) > 5
+        ? Math.abs(_pinchStartDy) / Math.max(Math.abs(dy), 5) : 1;
+      XL1    = Math.max(1, Math.min(Number(slXl1.max), _pinchStartXL1 * scaleX));
+      ylHalf = Math.max(1, Math.min(Number(slYl.max), _pinchStartYlHalf * scaleY));
+    }
+    xPhysMax  = XL1 * lam;
     yPhysHalf = ylHalf * lam;
     YL0 = -ylHalf; YL1 = ylHalf;
     slXl1.value = XL1.toFixed(3);
@@ -1247,7 +1276,8 @@ function draw() {
   const yPx = yl => fy0 + (1 - (yl - YL0) / (YL1 - YL0)) * fh;
 
   ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
-  for (let v = xTickStep; v < XL1; v += xTickStep) {
+  for (let n = 1; n * xTickStep < XL1; n++) {
+    const v = Math.round(n * xTickStep * 1e10) / 1e10;
     const xp = xPx(v); if (xp < fx0 || xp > fx0 + fw) continue;
     ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
   }
@@ -1315,7 +1345,8 @@ function draw() {
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.beginPath(); ctx.moveTo(fx0, fy0 + fh); ctx.lineTo(fx0, fy0 + fh + 5); ctx.stroke();
   ctx.fillText('0', fx0, fy0 + fh + 6);
-  for (let v = xTickStep; v < XL1; v += xTickStep) {
+  for (let n = 1; n * xTickStep < XL1; n++) {
+    const v = Math.round(n * xTickStep * 1e10) / 1e10;
     const xp = xPx(v);
     if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
     ctx.beginPath(); ctx.moveTo(xp, fy0 + fh); ctx.lineTo(xp, fy0 + fh + 5); ctx.stroke();
@@ -1622,7 +1653,8 @@ function updateF0Display() {
   const v = f0 / u.s;
   document.getElementById('sl-f0').value = Math.round(v);
   document.getElementById('btn-f0-unit').value = u.l;
-  document.getElementById('val-f0').textContent = Math.round(v) + ' ' + u.l + ' · λ = ' + lamStr();
+  document.getElementById('val-f0-phys').textContent = Math.round(v);
+  document.getElementById('val-f0-lam').textContent = lamStr();
 }
 function onFreqChange() {
   // Keep physical extents constant: recompute XL1/ylHalf from stored metres
@@ -1666,7 +1698,8 @@ function updateDDisplay() {
   const v = d_m / u.s;
   document.getElementById('sl-d').value = Math.round(v);
   document.getElementById('btn-d-unit').value = u.l;
-  document.getElementById('val-d').textContent = Math.round(v) + ' ' + u.l + ' · d/λ = ' + d_lam.toFixed(2);
+  document.getElementById('val-d-phys').textContent = Math.round(v);
+  document.getElementById('val-d-lam').textContent = d_lam.toFixed(2);
 }
 
 const _slD = document.getElementById('sl-d');
