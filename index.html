@@ -665,6 +665,15 @@ function niceTickStep(range, targetCount) {
   const mult  = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
   return mult * exp;
 }
+function fmtTick(v) {
+  if (Math.abs(v) >= 1e4) return v.toExponential(1).replace(/\.0(e)/, '$1').replace('e+', 'e');
+  return String(v);
+}
+function fmtLam(v) {
+  if (v >= 1e4) return fmtTick(v) + ' λ';
+  const r = Math.round(v * 10) / 10;
+  return (r % 1 === 0 ? String(r) : r.toFixed(1)) + ' λ';
+}
 
 function makeYTicks(half, includeZero) {
   const step = niceTickStep(2 * half, 6);
@@ -1102,7 +1111,7 @@ function updateAxisSliders() {
     yPhysHalf = ylHalf * lam;
     YL0 = -ylHalf; YL1 = ylHalf;
     slYl.value = ylHalf.toFixed(3);
-    document.getElementById('val-yl').textContent = ylHalf.toFixed(1) + ' λ';
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
   }
 }
 
@@ -1225,7 +1234,7 @@ function draw() {
     const xp = xPx(v);
     if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
     ctx.beginPath(); ctx.moveTo(xp, fy0 + fh); ctx.lineTo(xp, fy0 + fh + 5); ctx.stroke();
-    ctx.fillText(v, xp, fy0 + fh + 6);
+    ctx.fillText(fmtTick(v), xp, fy0 + fh + 6);
   }
   ctx.textAlign = 'right';
   ctx.fillText('x / λ', fx0 + fw, fy0 + fh + 6);
@@ -1235,7 +1244,7 @@ function draw() {
     const yp = yPx(v);
     if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
     ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 - 5, yp); ctx.stroke();
-    ctx.fillText(v, fx0 - 8, yp);
+    ctx.fillText(fmtTick(v), fx0 - 8, yp);
   });
   ctx.save();
   ctx.translate(fx0 / 2, fy0 + fh / 2); ctx.rotate(-Math.PI / 2);
@@ -1270,7 +1279,7 @@ function draw() {
     if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
     ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
     ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
-    ctx.fillText(v, SX + AXIS_W - 7, yp);
+    ctx.fillText(fmtTick(v), SX + AXIS_W - 7, yp);
     ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(RIGHT_X0, yp);
     ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
   });
@@ -1617,14 +1626,14 @@ document.getElementById('sel-presets').addEventListener('change', e => {
 document.getElementById('sl-xl1').addEventListener('input', () => {
   XL1 = Number(document.getElementById('sl-xl1').value);
   xPhysMax = XL1 * lam;
-  document.getElementById('val-xl1').textContent = XL1.toFixed(1) + ' λ';
+  document.getElementById('val-xl1').textContent = fmtLam(XL1);
   if (scaleLocked) {
     const slYl = document.getElementById('sl-yl');
     ylHalf    = Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)));
     yPhysHalf = ylHalf * lam;
     YL0 = -ylHalf; YL1 = ylHalf;
     slYl.value = ylHalf.toFixed(3);
-    document.getElementById('val-yl').textContent = ylHalf.toFixed(1) + ' λ';
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
   }
   recompute();
 });
@@ -1634,13 +1643,13 @@ document.getElementById('sl-yl').addEventListener('input', () => {
   ylHalf    = Number(document.getElementById('sl-yl').value);
   yPhysHalf = ylHalf * lam;
   YL0 = -ylHalf; YL1 = ylHalf;
-  document.getElementById('val-yl').textContent = ylHalf.toFixed(1) + ' λ';
+  document.getElementById('val-yl').textContent = fmtLam(ylHalf);
   if (scaleLocked) {
     const slXl1 = document.getElementById('sl-xl1');
     XL1      = Math.max(1, Math.min(Number(slXl1.max), aspectXL1(ylHalf)));
     xPhysMax = XL1 * lam;
     slXl1.value = XL1.toFixed(3);
-    document.getElementById('val-xl1').textContent = XL1.toFixed(1) + ' λ';
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
   }
   recompute();
 });
@@ -1658,7 +1667,7 @@ document.getElementById('btn-lock').addEventListener('click', () => {
     yPhysHalf = ylHalf * lam;
     YL0 = -ylHalf; YL1 = ylHalf;
     slYl.value = ylHalf.toFixed(3);
-    document.getElementById('val-yl').textContent = ylHalf.toFixed(1) + ' λ';
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
     recompute();
   }
 });
