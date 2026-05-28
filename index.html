@@ -210,7 +210,7 @@ select.src-select:focus { border-color: var(--text-dim); }
 /* ── Canvas area ─────────────────────────────────────────────────── */
 .canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); display: flex; flex-direction: row; }
 .canvas-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
-canvas#field { display: block; width: 100%; height: 100%; }
+canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 
 /* ── Axis-range sliders ───────────────────────────────────────────── */
 :root { --sl-track: 3px; --sl-thumb: 14px; }
@@ -329,6 +329,14 @@ canvas#field { display: block; width: 100%; height: 100%; }
 @media (orientation: portrait) and (max-width: 900px) {
   #rotate-prompt { display: flex; }
   .app, header { visibility: hidden; }
+}
+
+/* ── Mobile: hide axis sliders, move stats to sidebar ─────────── */
+#sb-stats-mobile { display: none; }
+@media (max-width: 900px) and (orientation: landscape) {
+  #y-slider-strip, #overlay-xl1, #btn-lock { display: none; }
+  .bottom-bar { display: none; }
+  #sb-stats-mobile { display: block; }
 }
 </style>
 </head>
@@ -574,6 +582,12 @@ self.onmessage = function(ev) {
     </div>
 
 
+    <div class="sb-group" id="sb-stats-mobile">
+      <div class="bstat"><span class="bstat-key">λ₀</span><span class="bstat-val" id="st-lam-m">—</span></div>
+      <div class="bstat"><span class="bstat-key">Fernfeld</span><span class="bstat-val" id="st-rff-m">—</span></div>
+      <div class="bstat"><span class="bstat-key">T</span><span class="bstat-val" id="st-T-m">—</span></div>
+      <div class="bstat"><span class="bstat-key">f₀</span><span class="bstat-val" id="st-f0-m">—</span></div>
+    </div>
   </aside>
 
   <div class="canvas-area">
@@ -733,6 +747,7 @@ const imgData = offCtx.createImageData(NX, NY);
 let _layoutFx0 = 54, _layoutFw = 600, _layoutFy0 = 28, _layoutFh = 400;
 
 let _screenDragging = false;
+let _pinchStartDist = null, _pinchStartXL1 = 0, _pinchStartYlHalf = 0;
 
 canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
@@ -767,6 +782,15 @@ canvas.addEventListener('mouseup', () => { _screenDragging = false; });
 canvas.addEventListener('mouseleave', () => { _screenDragging = false; });
 
 canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    const t = e.touches;
+    _pinchStartDist   = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+    _pinchStartXL1    = XL1;
+    _pinchStartYlHalf = ylHalf;
+    _screenDragging   = false;
+    e.preventDefault();
+    return;
+  }
   const rect = canvas.getBoundingClientRect();
   const mx = e.touches[0].clientX - rect.left;
   const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
@@ -777,6 +801,27 @@ canvas.addEventListener('touchstart', e => {
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && _pinchStartDist !== null) {
+    e.preventDefault();
+    const t = e.touches;
+    const dist  = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+    const scale = _pinchStartDist / dist;
+    const slXl1 = document.getElementById('sl-xl1');
+    const slYl  = document.getElementById('sl-yl');
+    XL1      = Math.max(1, Math.min(Number(slXl1.max), _pinchStartXL1 * scale));
+    xPhysMax = XL1 * lam;
+    ylHalf   = scaleLocked
+      ? Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)))
+      : Math.max(1, Math.min(Number(slYl.max), _pinchStartYlHalf * scale));
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slXl1.value = XL1.toFixed(3);
+    slYl.value  = ylHalf.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
+    recompute();
+    return;
+  }
   if (!_screenDragging) return;
   const rect = canvas.getBoundingClientRect();
   const mx = e.touches[0].clientX - rect.left;
@@ -792,7 +837,10 @@ canvas.addEventListener('touchmove', e => {
   e.preventDefault();
 }, { passive: false });
 
-canvas.addEventListener('touchend', () => { _screenDragging = false; });
+canvas.addEventListener('touchend', e => {
+  if (e.touches.length < 2) _pinchStartDist = null;
+  if (e.touches.length === 0) _screenDragging = false;
+});
 
 function recompute() {
   lam   = C_LIGHT / f0;
@@ -1470,6 +1518,9 @@ function updateStats() {
     rFFtext = (rFFm / uR.s).toFixed(2) + ' ' + uR.l;
   }
   document.getElementById('st-rff').textContent = rFFtext;
+  // mirror to mobile sidebar
+  const _m = s => { const el = document.getElementById(s + '-m'); if (el) el.textContent = document.getElementById(s).textContent; };
+  _m('st-lam'); _m('st-T'); _m('st-f0'); _m('st-rff');
 }
 
 const selSrc = document.getElementById('sel-src');
