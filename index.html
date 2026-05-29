@@ -54,7 +54,34 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .header-title {
   font-family: 'DM Mono', monospace; font-size: 18px;
   font-weight: 500; color: var(--text-bright); letter-spacing: .05em;
-  flex-shrink: 0; margin-right: 4px;
+  flex-shrink: 0;
+  /* title + gap(8) = sidebar-w → title = sidebar-w - 14(left-pad) - 8(gap) = sidebar-w - 22 */
+  min-width: calc(var(--sidebar-w) - 22px);
+}
+.header-controls {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center;
+  gap: 8px;
+}
+.header-speed {
+  display: flex; flex-direction: column; gap: 2px;
+  flex-shrink: 0; min-width: 60px;
+  /* width set by JS to end at ~midpoint of 2D field */
+}
+.header-speed input[type=range] {
+  width: 100%; -webkit-appearance: none; appearance: none;
+  color: var(--text-dim); touch-action: none;
+}
+.header-right {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center;
+  justify-content: space-evenly;
+  gap: 8px;
+}
+.header-rff {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  color: var(--text-dim); white-space: nowrap; flex-shrink: 0;
+  letter-spacing: 0.02em;
 }
 .canvas-top-bar {
   display: flex; align-items: center; flex-shrink: 0;
@@ -63,11 +90,10 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 #btn-timeavg {
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
-  height: 42px; padding: 0 8px; line-height: 1.3;
+  height: 28px; padding: 0 8px;
   cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  /* width and margin-left set by JS to align with intensity plot axes */
+  white-space: nowrap; flex: 1;
 }
 #btn-timeavg:hover { opacity: 1; }
 #btn-timeavg.active {
@@ -75,14 +101,12 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   background: color-mix(in srgb, var(--gold) 12%, var(--panel));
 }
 #btn-fraunhofer {
-  position: absolute; z-index: 5;
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
-  padding: 2px 8px;
+  height: 28px; padding: 0 8px;
   cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
   display: flex; align-items: center; justify-content: center;
-  line-height: 1.2; text-align: center;
-  /* left, width, bottom set by JS to align with intensity plot axes */
+  white-space: nowrap; flex: 1;
 }
 #btn-fraunhofer:hover { opacity: 1; }
 #btn-fraunhofer:disabled { opacity: 0.25; cursor: default; }
@@ -160,10 +184,10 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   width: var(--sidebar-w); flex-shrink: 0;
   background: var(--panel); border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
-  overflow-y: auto; overflow-x: hidden;
+  overflow: hidden;
 }
-.sidebar::-webkit-scrollbar { width: 3px; }
-.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar-content::-webkit-scrollbar { width: 3px; }
+.sidebar-content::-webkit-scrollbar-track { background: transparent; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .sb-group { padding: 6px 11px 10px; border-bottom: 1px solid var(--border); }
@@ -250,7 +274,7 @@ select.src-select:focus { border-color: var(--text-dim); }
 /* ── Bottom parameter bar ────────────────────────────────────────── */
 .bottom-presets { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .preset-drop { width: 100%; }
-.bstat { display: flex; align-items: baseline; gap: 7px; }
+.bstat { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; }
 .bstat-key { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .04em; color: var(--text-dim); }
 .bstat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); white-space: nowrap; }
 
@@ -352,23 +376,38 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   border-radius: 50%; background: var(--text-dim); border: none;
 }
 
-/* ── Sidebar toggle — always visible ─────────────────────────────── */
-#btn-sidebar-toggle {
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 4px; color: var(--text-dim); font-size: 15px;
-  width: 28px; height: 28px; cursor: pointer; opacity: 0.8;
-  margin-right: 0;
-}
-#btn-sidebar-toggle:hover { opacity: 1; }
-
-/* Desktop sidebar: collapsible via sidebar-hidden class */
+/* Desktop sidebar: collapses to a narrow strip showing only the toggle button */
 .sidebar {
   transition: width 0.22s ease;
   overflow-x: hidden;
 }
-.sidebar.sidebar-hidden { width: 0; border-right: none; }
+.sidebar.sidebar-hidden { width: 36px; }
+.sidebar-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 4px; flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-title {
+  font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+  color: var(--text-dim); letter-spacing: .06em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; padding-left: 7px;
+}
+.sidebar-content {
+  overflow-y: auto; overflow-x: hidden; flex: 1;
+}
+/* Collapsed strip: center the button, hide all content */
+.sidebar.sidebar-hidden .sidebar-header { justify-content: center; }
+.sidebar.sidebar-hidden .sidebar-title  { display: none; }
+.sidebar.sidebar-hidden .sidebar-content { visibility: hidden; }
+#btn-sidebar-toggle {
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text-dim); font-size: 15px;
+  width: 28px; height: 28px; cursor: pointer; opacity: 0.8;
+}
+#btn-sidebar-toggle:hover { opacity: 1; }
 
 /* ── Field group (over 2D plot) ──────────────────────────────────── */
 .field-group {
@@ -389,12 +428,13 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   /* Hide header for more vertical space */
   header { display: none; }
 
-  /* Sidebar slides in from left as overlay */
+  /* Sidebar slides in from left as overlay; rests at 36px strip when closed */
   .sidebar {
     position: fixed; left: 0; top: 0; height: 100vh; z-index: 100;
-    transform: translateX(calc(-1 * var(--sidebar-w) - 2px));
+    transform: translateX(calc(36px - var(--sidebar-w)));
     transition: transform 0.22s ease;
     box-shadow: none;
+    width: var(--sidebar-w) !important; /* override sidebar-hidden width on mobile */
   }
   .sidebar.mobile-open {
     transform: translateX(0);
@@ -408,11 +448,9 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   .canvas-area { padding-bottom: max(18px, env(safe-area-inset-bottom, 18px)); }
 
   /* Sidebar toggle — smaller on mobile */
-  #btn-sidebar-toggle { width: 26px; height: 26px; font-size: 14px; margin-left: 4px; }
-
   /* Play button — smaller on mobile */
   #btn-play { width: 26px; height: 26px; font-size: 13px; }
-  #btn-timeavg { font-size: 11px; height: 38px; }
+  #btn-timeavg { font-size: 11px; }
   #btn-fraunhofer { font-size: 11px; }
 
   /* Lock button: match btn-timeavg size on mobile */
@@ -581,16 +619,31 @@ self.onmessage = function(ev) {
 
 <header>
   <div class="header-inner">
-    <div class="header-title">
-      EM-Wellen
+    <div class="header-title">EM-Wellen</div>
+    <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
+    <div class="header-controls">
+      <div class="header-speed">
+        <span class="tempo-val" id="val-tempo-top"></span>
+        <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
+      </div>
+      <div class="header-right">
+        <span class="header-rff">Fernfeldgrenze: <span id="st-rff-hdr">—</span></span>
+        <button id="btn-fraunhofer">Zentriere auf Fernfeldgrenze</button>
+        <button id="btn-timeavg">Normiert und zeitgemittelt</button>
+      </div>
     </div>
-    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln" style="margin-left:auto">☾</button>
+    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☾</button>
   </div>
 </header>
 
 <div class="app">
 
   <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Einstellungen</span>
+      <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
+    </div>
+    <div class="sidebar-content">
 
     <div class="sb-group">
       <div class="sb-label">Quellen</div>
@@ -610,8 +663,6 @@ self.onmessage = function(ev) {
           <div class="slider-info">
             <span class="si-label">Abstand d =</span>
             <span class="si-val"><span id="val-d-phys">100</span><select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
-            <span class="si-dim">d/λ =</span>
-            <span class="si-val"><span id="val-d-lam">2.00</span></span>
           </div>
           <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
         </div>
@@ -632,10 +683,28 @@ self.onmessage = function(ev) {
         <div class="slider-info">
           <span class="si-label">Frequenz f₀ =</span>
           <span class="si-val"><span id="val-f0-phys">6</span><select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
-          <span class="si-dim">λ =</span>
-          <span class="si-val"><span id="val-f0-lam">5.00 cm</span></span>
         </div>
         <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
+      </div>
+      <div class="bstat" style="margin-top:8px">
+        <span class="bstat-key">Wellenlänge (λ₀)</span>
+        <span class="bstat-val" id="st-lam">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">d / λ</span>
+        <span class="bstat-val" id="st-d-lam">—</span>
+      </div>
+      <div class="bstat" id="st-nd-row" style="display:none">
+        <span class="bstat-key">N · d</span>
+        <span class="bstat-val" id="st-nd">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">Periodendauer (T)</span>
+        <span class="bstat-val" id="st-T">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">Fernfeldgrenze</span>
+        <span class="bstat-val" id="st-rff">—</span>
       </div>
     </div>
 
@@ -660,6 +729,14 @@ self.onmessage = function(ev) {
         </div>
         <input type="range" id="sl-src-p" min="-10" max="10" step="1" value="0">
       </div>
+      <select id="sel-presets" class="preset-btn preset-drop" style="margin-top:6px;width:100%">
+        <option value="" disabled selected>Presets…</option>
+        <option value="alt">Alt. Phase</option>
+        <option value="beam">Beam-Steering</option>
+        <option value="rnd">Zufällige Phase</option>
+        <option value="half">Hälfte aus</option>
+      </select>
+      <button class="preset-btn" id="btn-reset" style="margin-top:4px;width:100%">Zurücksetzen</button>
     </div>
 
     <div class="sb-group">
@@ -678,52 +755,10 @@ self.onmessage = function(ev) {
       <div class="bstat"><span class="bstat-key">f₀</span><span class="bstat-val" id="st-f0-m">—</span></div>
     </div>
 
-    <div class="sb-group">
-      <div class="bottom-presets" style="margin-bottom:8px">
-        <button class="preset-btn" id="btn-reset">Reset</button>
-        <select id="sel-presets" class="preset-btn preset-drop">
-          <option value="" disabled selected>Presets…</option>
-          <option value="alt">Alt. Phase</option>
-          <option value="beam">Beam-Steering</option>
-          <option value="rnd">Zufällige Phase</option>
-          <option value="half">Hälfte aus</option>
-        </select>
-      </div>
-      <div class="bstat">
-        <span class="bstat-key">Wellenlänge (λ₀)</span>
-        <span class="bstat-val" id="st-lam">—</span>
-      </div>
-      <div class="bstat">
-        <span class="bstat-key">Fraunhofer Abstand (Fernfeld)</span>
-        <span class="bstat-val" id="st-rff">—</span>
-      </div>
-      <div class="bstat">
-        <span class="bstat-key">Periodendauer (T)</span>
-        <span class="bstat-val" id="st-T">—</span>
-      </div>
-      <div class="bstat">
-        <span class="bstat-key">Frequenz (f₀)</span>
-        <span class="bstat-val" id="st-f0">—</span>
-      </div>
-    </div>
+    </div><!-- /.sidebar-content -->
   </aside>
 
   <div class="canvas-area">
-    <div class="canvas-top-bar">
-      <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
-      <div class="field-group" id="field-group">
-        <div class="field-top-row">
-          <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
-          <div class="tempo-area">
-            <span class="tempo-val" id="val-tempo-top"></span>
-            <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
-          </div>
-        </div>
-      </div>
-      <div class="ctrl-area" id="ctrl-area">
-        <button id="btn-timeavg">Normiert und<br>zeitgemittelt</button>
-      </div>
-    </div>
     <div class="canvas-wrap">
       <canvas id="field"></canvas>
       <div class="load-area" id="load-area">
@@ -739,7 +774,6 @@ self.onmessage = function(ev) {
         <input type="range" id="sl-xl1" min="1" max="100" value="12" step="1">
         <span class="ax-val" id="val-xl1">12 λ</span>
       </div>
-      <button id="btn-fraunhofer">Zentriere auf<br>Fernfeldgrenze</button>
     </div>
   </div>
 
@@ -1375,47 +1409,23 @@ function draw() {
   const fy0  = XAXIS_TOP_H;
   _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
   updateAxisSliders();
-  // Align field-group over 2D plot; ctrl-area over intensity panel
-  { const ca          = document.getElementById('ctrl-area');
-    const fieldGroup  = document.getElementById('field-group');
-    const sidebarBtn  = document.getElementById('btn-sidebar-toggle');
-    const wrap        = document.querySelector('.load-bar-wrap');
-    const cl          = canvas.getBoundingClientRect().left;
-    if (fieldGroup && sidebarBtn) {
-      // Centre sidebar button in the fx0-wide space left of the play button
-      const btnW      = sidebarBtn.offsetWidth;
-      const sidebarM  = Math.max(0, Math.round((fx0 - btnW) / 2));
-      sidebarBtn.style.marginLeft = sidebarM + 'px';
-      // field-group left edge = sidebarM + btnW + fieldGap  →  should equal fx0
-      const fieldGap  = Math.max(0, fx0 - sidebarM - btnW);
-      fieldGroup.style.marginLeft = fieldGap + 'px';
-      fieldGroup.style.width      = fw.toFixed(0) + 'px';
+  // Size c-slider to end at the midpoint of the 2D field
+  // header-speed starts at: left-pad(14) + title(sidebar_w-22) + gap(8) + play(28) + gap(8) = sidebar_w+36
+  // field midpoint from window left = sidebar_w + fx0 + fw/2
+  // so speed width = fx0 + fw/2 - 36
+  { const hdrSpeed = document.querySelector('.header-speed');
+    if (hdrSpeed) {
+      const w = Math.max(60, Math.round(fx0 + fw / 2 - 36));
+      hdrSpeed.style.width = w + 'px';
     }
-    if (ca) ca.style.width = SCREEN_W + 'px';
-    // Position progress bar on the top edge of the 2D field
-    const la = document.getElementById('load-area');
+  }
+
+  // Position progress bar overlay on the top edge of the 2D field
+  { const la = document.getElementById('load-area');
     if (la) {
       la.style.left  = fx0 + 'px';
       la.style.width = fw  + 'px';
-      la.style.top   = (fy0 - 1) + 'px';  // straddle the field top edge
-    }
-    if (wrap) { wrap.style.marginLeft = '0'; wrap.style.marginRight = '0'; wrap.style.marginTop = '0'; }
-    // Size btn-timeavg and btn-fraunhofer to span from the intensity y/λ axis to the mm axis
-    const AXIS_W  = Math.min(isMob ? 36 : 46, Math.floor(SCREEN_W * 0.28));
-    const RIGHT_W = SCREEN_W >= 150 ? (isMob ? 34 : 44) : 0;
-    const btnTa  = document.getElementById('btn-timeavg');
-    if (btnTa && ca) {
-      btnTa.style.marginLeft = AXIS_W + 'px';
-      btnTa.style.width      = (SCREEN_W - AXIS_W - RIGHT_W) + 'px';
-    }
-    // Position btn-fraunhofer in the intensity panel, same row as x/λ slider
-    const btnFr = document.getElementById('btn-fraunhofer');
-    if (btnFr) {
-      const SX_dom = FIELD_W + 1;  // left edge of intensity panel in canvas-wrap coords
-      btnFr.style.left   = (SX_dom + AXIS_W) + 'px';
-      btnFr.style.width  = (SCREEN_W - AXIS_W - RIGHT_W) + 'px';
-      btnFr.style.bottom = '8px';
-      btnFr.disabled     = !(Number.isFinite(rFF) && rFF > 0);
+      la.style.top   = (fy0 - 1) + 'px';
     }
   }
 
@@ -1757,7 +1767,6 @@ function draw() {
 function updateStats() {
   if (!lam) return;
   const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
-  const FREQ_U = [{l:'THz',s:1e12},{l:'GHz',s:1e9},{l:'MHz',s:1e6},{l:'kHz',s:1e3},{l:'Hz',s:1}];
   const TIME_U = [{l:'s',s:1},{l:'ms',s:1e-3},{l:'µs',s:1e-6},{l:'ns',s:1e-9},{l:'ps',s:1e-12},{l:'fs',s:1e-15}];
   const pick = (arr, val) => arr.find(u => val / u.s >= 0.5) || arr[arr.length - 1];
 
@@ -1767,9 +1776,6 @@ function updateStats() {
   const uT = pick(TIME_U, T_per);
   document.getElementById('st-T').textContent = (T_per / uT.s).toFixed(2) + ' ' + uT.l;
 
-  const uF = pick(FREQ_U, f0);
-  document.getElementById('st-f0').textContent = (f0 / uF.s).toFixed(2) + ' ' + uF.l;
-
   let rFFtext = '—';
   if (!isNaN(rFF) && rFF > 0) {
     const rFFm = rFF * lam;
@@ -1777,9 +1783,12 @@ function updateStats() {
     rFFtext = (rFFm / uR.s).toFixed(2) + ' ' + uR.l;
   }
   document.getElementById('st-rff').textContent = rFFtext;
+  document.getElementById('st-rff-hdr').textContent = rFFtext;
+  const btnFr = document.getElementById('btn-fraunhofer');
+  if (btnFr) btnFr.disabled = !(Number.isFinite(rFF) && rFF > 0);
   // mirror to mobile sidebar
   const _m = s => { const el = document.getElementById(s + '-m'); if (el) el.textContent = document.getElementById(s).textContent; };
-  _m('st-lam'); _m('st-T'); _m('st-f0'); _m('st-rff');
+  _m('st-lam'); _m('st-T'); _m('st-rff');
 }
 
 const selSrc = document.getElementById('sel-src');
@@ -1841,6 +1850,7 @@ function readGlobals() {
   recompute();
 
   document.getElementById('val-N').textContent = newN;
+  updateDDisplay();
 }
 document.getElementById('sl-N').addEventListener('input', readGlobals);
 
@@ -1855,7 +1865,8 @@ function updateF0Display() {
   document.getElementById('sl-f0').value = Math.round(v);
   document.getElementById('btn-f0-unit').value = u.l;
   document.getElementById('val-f0-phys').textContent = Math.round(v);
-  document.getElementById('val-f0-lam').textContent = lamStr();
+  const lamEl = document.getElementById('val-f0-lam');
+  if (lamEl) lamEl.textContent = lamStr();
 }
 function onFreqChange() {
   // Keep physical extents constant: recompute XL1/ylHalf from stored metres
@@ -1901,7 +1912,18 @@ function updateDDisplay() {
   document.getElementById('sl-d').value = Math.round(v);
   document.getElementById('btn-d-unit').value = u.l;
   document.getElementById('val-d-phys').textContent = Math.round(v);
-  document.getElementById('val-d-lam').textContent = d_lam.toFixed(2);
+  const stDLam = document.getElementById('st-d-lam');
+  if (stDLam) stDLam.textContent = d_lam.toFixed(2);
+  const ndRow = document.getElementById('st-nd-row');
+  const ndEl  = document.getElementById('st-nd');
+  const showNd = !isDipolMode && N_SRC > 1;
+  if (ndRow) ndRow.style.display = showNd ? '' : 'none';
+  if (ndEl && showNd) {
+    const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
+    const nd_m = N_SRC * d_m;
+    const uNd = DIST_U.find(u => nd_m / u.s >= 0.5) || DIST_U[DIST_U.length - 1];
+    ndEl.textContent = (nd_m / uNd.s).toFixed(2) + ' ' + uNd.l;
+  }
 }
 
 const _slD = document.getElementById('sl-d');
@@ -1937,6 +1959,7 @@ function applyMode() {
   screenAcc.fill(0);
   wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
   recompute();
+  updateDDisplay();
 }
 function applyDipolControls() {
   dipolInfinite = document.getElementById('chk-infinite').checked;
@@ -1958,10 +1981,14 @@ const _presetFns = {
   rnd:  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }),
   half: () => preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }),
 };
-document.getElementById('btn-reset').addEventListener('click', () => { screenOverride = false; preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; }); });
+document.getElementById('btn-reset').addEventListener('click', () => {
+  screenOverride = false;
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; });
+  document.getElementById('sel-presets').value = '';
+});
 document.getElementById('sel-presets').addEventListener('change', e => {
   if (_presetFns[e.target.value]) _presetFns[e.target.value]();
-  e.target.value = '';
+  // keep the selected option visible (do not reset to '')
 });
 
 document.getElementById('sl-xl1').addEventListener('input', () => {
