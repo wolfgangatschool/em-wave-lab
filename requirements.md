@@ -1,4 +1,4 @@
-# EM-Wellen · Beugungsgitter — Requirements, Architecture & Design Decisions
+# EM-Wave Lab · Beugungsgitter — Requirements, Architecture & Design Decisions
 
 > **Continuity contract**: Before adding any feature, verify it is consistent with the
 > physics model (Section 3), does not break the analytical overlay conditions (Section 5 DD6),
@@ -20,7 +20,7 @@ beam-steering immediately tangible through live sliders — no install, no Pytho
 ## 2. File Structure
 
 ```
-em-wellen/
+em-wave-lab/
   index.html        — complete app (single self-contained file, no build step)
   requirements.md   — this document
 ```

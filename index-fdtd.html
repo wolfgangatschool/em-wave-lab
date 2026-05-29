@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EM-Wave Lab · FDTD-Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:         #0a0b0e;
+  --panel:      #13151b;
+  --panel2:     #181b22;
+  --border:     #252830;
+  --text:       #d4d8e4;
+  --text-dim:   #8a94a8;
+  --text-bright:#e4e6ee;
+  --gold:       #d4a85a;
+  --blue:       #6ed0ff;
+  --orange:     #ffb455;
+  --red:        #ff7070;
+  --radius:     12px;
+  --radius-sm:  8px;
+  --sidebar-w:  220px;
+}
+body.light {
+  --bg:         #f5f6fa;
+  --panel:      #ffffff;
+  --panel2:     #eef0f6;
+  --border:     #c8cbd8;
+  --text:       #2a2d3a;
+  --text-dim:   #555e7a;
+  --text-bright:#1a1d2e;
+  --gold:       #a07020;
+  --blue:       #1a7fb5;
+  --orange:     #c06000;
+  --red:        #c0302a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 14px;
+  font-weight: 300; line-height: 1.5;
+  display: flex; flex-direction: column;
+}
+header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--panel); }
+.header-inner { display: flex; align-items: center; gap: 8px; padding: 7px 14px; }
+.header-title {
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  font-weight: 400; color: var(--text-dim); letter-spacing: .05em;
+  flex-shrink: 0; margin-right: 4px;
+}
+.header-title strong { font-weight: 500; color: var(--text-bright); }
+.header-title em     { font-style: italic; color: var(--gold); }
+.header-btn, .theme-toggle {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 15px; width: 28px; height: 28px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
+}
+.header-btn:hover, .theme-toggle:hover { border-color: var(--text-dim); color: var(--text-bright); }
+.header-btn.active { border-color: var(--gold); color: var(--gold); }
+.app { display: flex; flex: 1; min-height: 0; }
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.sb-group { padding: 6px 11px 10px; border-bottom: 1px solid var(--border); }
+.sb-group:last-child { border-bottom: none; }
+.sb-label {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  letter-spacing: .15em; text-transform: uppercase; color: var(--gold);
+  padding-bottom: 5px;
+}
+.slider-group { margin-bottom: 7px; }
+.slider-group:last-child { margin-bottom: 0; }
+.slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
+.slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
+.slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 2px;
+  background: var(--border); outline: none; border-radius: 999px; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid currentColor; background: var(--bg); cursor: pointer;
+  transition: transform .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+input[type=range]::-moz-range-thumb {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid currentColor; background: var(--bg); cursor: pointer;
+}
+select.src-select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 3px 6px; outline: none; cursor: pointer; margin-bottom: 7px;
+  -webkit-appearance: none; appearance: none;
+}
+select.src-select option { background: var(--panel); }
+select.src-select:focus { border-color: var(--text-dim); }
+.toggle-row { display: flex; flex-direction: column; gap: 6px; padding: 2px 0; user-select: none; }
+.toggle-row label {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-dim);
+}
+.toggle-row input[type=checkbox] { accent-color: var(--gold); width: 12px; height: 12px; cursor: pointer; flex-shrink: 0; }
+.preset-stack { display: flex; flex-direction: column; gap: 4px; }
+.preset-btn {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 5px 9px; cursor: pointer; transition: border-color .15s, color .15s;
+  letter-spacing: .04em; text-align: left; width: 100%;
+}
+.preset-btn:hover { border-color: var(--gold); color: var(--gold); }
+.obstacle-btns { display: flex; gap: 5px; }
+.obstacle-btns button {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  padding: 5px 4px; cursor: pointer; transition: border-color .15s, color .15s;
+}
+.obstacle-btns button:hover { border-color: var(--text-dim); color: var(--text); }
+.obstacle-btns button.active { border-color: var(--gold); color: var(--gold); }
+.sb-stats {
+  margin-top: auto; padding: 8px 11px 8px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+.stat-key { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); letter-spacing: .04em; }
+.stat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); }
+.canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); }
+.canvas-wrap { width: 100%; height: 100%; overflow: hidden; }
+canvas#field { display: block; width: 100%; height: 100%; }
+canvas#field.draw-mode { cursor: crosshair; }
+
+/* Mobile landscape: narrower sidebar */
+@media (max-width: 900px) and (orientation: landscape) {
+  :root { --sidebar-w: 180px; }
+}
+/* Portrait: rotate prompt */
+#rotate-prompt {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+  text-align: center; padding: 32px;
+}
+#rotate-prompt .rotate-icon { font-size: 56px; line-height: 1; animation: rotate-hint 2s ease-in-out infinite; }
+@keyframes rotate-hint { 0%,100%{transform:rotate(0deg)} 40%,60%{transform:rotate(90deg)} }
+#rotate-prompt p { font-family:'DM Mono',monospace; font-size:14px; color:var(--text-dim); max-width:260px; line-height:1.6; }
+@media (orientation: portrait) and (max-width: 900px) {
+  #rotate-prompt { display: flex; }
+  .app, header { visibility: hidden; }
+}
+</style>
+</head>
+<body>
+
+<div id="rotate-prompt">
+  <div class="rotate-icon">📱</div>
+  <p>Bitte Gerät drehen, um die Simulation zu nutzen.</p>
+</div>
+
+<header>
+  <div class="header-inner">
+    <div class="header-title"><strong>EM-Wave Lab</strong> · <em>FDTD-Simulation</em></div>
+    <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
+    <div style="flex:1"></div>
+    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☾</button>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+
+    <div class="sb-group">
+      <div class="sb-label">Array</div>
+      <div class="slider-group" style="color:var(--gold)">
+        <div class="slider-label">
+          <span class="pname">f₀</span>
+          <span class="pval" id="val-f0">1.00 GHz</span>
+        </div>
+        <input type="range" id="sl-f0" min="1" max="100" value="10" step="1">
+      </div>
+      <div class="slider-group" style="color:var(--blue)">
+        <div class="slider-label">
+          <span class="pname">d/λ</span>
+          <span class="pval" id="val-d">1.50</span>
+        </div>
+        <input type="range" id="sl-d" min="5" max="300" value="150" step="5">
+      </div>
+      <div class="slider-group" style="color:var(--blue)">
+        <div class="slider-label">
+          <span class="pname">N</span>
+          <span class="pval" id="val-N">2</span>
+        </div>
+        <input type="range" id="sl-N" min="1" max="20" value="2" step="1">
+      </div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Quelle</div>
+      <select class="src-select" id="sel-src"></select>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">A</span>
+          <span class="pval" id="val-src-a">1.00</span>
+        </div>
+        <input type="range" id="sl-src-a" min="0" max="100" step="1" value="100">
+      </div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">φ</span>
+          <span class="pval" id="val-src-p">0.00π</span>
+        </div>
+        <input type="range" id="sl-src-p" min="-200" max="200" step="25" value="0">
+      </div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Ansicht</div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">Schirm</span>
+          <span class="pval" id="val-scr">7.0 λ</span>
+        </div>
+        <input type="range" id="sl-scr" min="1" max="9" value="7" step="0.5">
+      </div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label">
+          <span class="pname">Tempo</span>
+          <span class="pval" id="val-speed">4 Schr./Frame</span>
+        </div>
+        <input type="range" id="sl-speed" min="1" max="20" value="4" step="1">
+      </div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Hindernisse</div>
+      <div class="obstacle-btns">
+        <button id="btn-draw" title="Rechteck zeichnen">✏ Zeichnen</button>
+        <button id="btn-clear-obs" title="Alle Hindernisse löschen">🗑 Löschen</button>
+      </div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Presets</div>
+      <div class="preset-stack">
+        <button class="preset-btn" id="btn-reset">Reset</button>
+        <button class="preset-btn" id="btn-einzelspalt">Einzelspalt (2λ)</button>
+        <button class="preset-btn" id="btn-doppelspalt">Doppelspalt (1λ)</button>
+        <button class="preset-btn" id="btn-reflektor">Reflektor</button>
+        <button class="preset-btn" id="btn-alt">Alt. Phase</button>
+        <button class="preset-btn" id="btn-beam">Beam-Steering</button>
+      </div>
+    </div>
+
+    <div class="sb-stats">
+      <div class="stat-row"><span class="stat-key">λ</span><span class="stat-val" id="st-lam">—</span></div>
+      <div class="stat-row"><span class="stat-key">Gitter</span><span class="stat-val" id="st-grid">240×340</span></div>
+      <div class="stat-row"><span class="stat-key">Schritt</span><span class="stat-val" id="st-step">0</span></div>
+      <div class="stat-row"><span class="stat-key">r_FF</span><span class="stat-val" id="st-rff">—</span></div>
+      <div class="stat-row"><span class="stat-key">fps</span><span class="stat-val" id="st-fps">—</span></div>
+      <div class="stat-row"><span class="stat-key">Modus</span><span class="stat-val">FDTD</span></div>
+    </div>
+
+  </aside>
+
+  <div class="canvas-area">
+    <div class="canvas-wrap">
+      <canvas id="field"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const C_LIGHT = 299792458;
+
+// ── FDTD grid constants ──────────────────────────────────────────────────────
+// 240×340 grid, 20-cell PML on each side.
+// Active region: 200×300 cells = 10λ × 15λ  (±7.5λ in y, matching existing sim)
+const NX    = 240, NY = 340;
+const N_PML = 20;
+const N_LAM = 20;   // cells per wavelength
+const DT    = 0.5;  // normalized timestep; c·dt/dx = 0.5 < 1/√2 ≈ 0.707 (stable)
+const I_SRC = N_PML + 1;   // source column = 21
+const AX0   = N_PML, AX1 = NX - N_PML;  // active x: [20, 220)
+const AY0   = N_PML, AY1 = NY - N_PML;  // active y: [20, 320)
+const ANX   = AX1 - AX0;  // 200 cells = 10λ
+const ANY   = AY1 - AY0;  // 300 cells = 15λ = ±7.5λ
+const XL_LAM  = ANX / N_LAM;   // 10λ  active x extent
+const YL_HALF = ANY / 2 / N_LAM; // 7.5λ active y half-extent
+const J_CTR   = Math.round((NY - 1) / 2); // = 169  (centre row)
+
+// ── Field arrays ─────────────────────────────────────────────────────────────
+const Ez  = new Float32Array(NX * NY);
+const Hx  = new Float32Array(NX * NY);  // at (i, j+½)
+const Hy  = new Float32Array(NX * NY);  // at (i+½, j)
+const sponge  = new Float32Array(NX * NY);
+const pecMask = new Uint8Array(NX * NY).fill(1); // 0 = PEC conductor
+
+// ── Screen accumulator ───────────────────────────────────────────────────────
+const screenAcc = new Float32Array(ANY);
+const SCREEN_DECAY = 0.015;
+
+// ── Simulation state ─────────────────────────────────────────────────────────
+let simStep = 0;
+let isLight = false;
+let isPaused = false;
+let N_SRC = 2;
+let f0 = 1e9;
+let d_lam = 1.5;
+let stepsPerFrame = 4;
+let screenLam = 7.0;
+let srcs = Array.from({length: 100}, () => ({amp: 1.0, phase: 0.0}));
+let obstacles = [];          // [{i0, j0, i1, j1}]
+let srcGridPos = [];         // [{j_pos, amp, phase}] — recomputed on param change
+
+// Draw-mode state
+let drawMode = false;
+let drawStart = null;    // {i, j} grid coords at mousedown
+let drawCurrent = null;  // {i, j} grid coords at current mouse pos
+
+// Layout cache (updated each draw frame, used by pointer handlers)
+let _fx0 = 54, _fy0 = 28, _fw = 600, _fh = 400;
+let _screenDragging = false;
+
+// ── RdBu colormap ────────────────────────────────────────────────────────────
+const CM = [
+  [5,48,97],[33,102,172],[67,147,195],[146,197,222],[247,247,247],
+  [244,165,130],[214,96,77],[178,24,43],[103,0,31]
+];
+function cmRGB(t) {
+  const u = Math.max(0, Math.min(1, (t + 1) / 2));
+  const p = u * (CM.length - 1);
+  const lo = Math.min(Math.floor(p), CM.length - 2);
+  const f  = p - lo;
+  const a  = CM[lo], b = CM[lo + 1];
+  return [a[0]+(b[0]-a[0])*f|0, a[1]+(b[1]-a[1])*f|0, a[2]+(b[2]-a[2])*f|0];
+}
+
+// ── Sponge PML ───────────────────────────────────────────────────────────────
+// Cubic conductivity profile σ(d) = σ_max·(d/N_PML)³ gives one-way
+// attenuation ≈ exp(−0.5·σ_max·N_PML/4) ≈ exp(−3.75) ≈ 0.024 for σ_max=1.5.
+function initSponge() {
+  const SIGMA_MAX = 1.5, M = 3;
+  for (let i = 0; i < NX; i++) {
+    for (let j = 0; j < NY; j++) {
+      let dx = 0, dy = 0;
+      if      (i < N_PML)            dx = (N_PML - i) / N_PML;
+      else if (i >= NX - N_PML)      dx = (i - (NX - N_PML - 1)) / N_PML;
+      if      (j < N_PML)            dy = (N_PML - j) / N_PML;
+      else if (j >= NY - N_PML)      dy = (j - (NY - N_PML - 1)) / N_PML;
+      const d = Math.max(dx, dy);
+      sponge[i * NY + j] = Math.exp(-SIGMA_MAX * Math.pow(d, M) * DT);
+    }
+  }
+}
+
+// ── Source grid positions ────────────────────────────────────────────────────
+function updateSrcGridPos() {
+  srcGridPos = [];
+  for (let n = 0; n < N_SRC; n++) {
+    const yn    = (n - (N_SRC - 1) / 2) * d_lam;
+    const j_pos = Math.round(J_CTR + yn * N_LAM);
+    srcGridPos.push({j_pos, amp: srcs[n].amp, phase: srcs[n].phase});
+  }
+}
+
+// ── PEC mask ─────────────────────────────────────────────────────────────────
+function recomputePEC() {
+  pecMask.fill(1);
+  for (const obs of obstacles) {
+    for (let i = Math.max(0, obs.i0); i <= Math.min(NX - 1, obs.i1); i++) {
+      const iNY = i * NY;
+      for (let j = Math.max(0, obs.j0); j <= Math.min(NY - 1, obs.j1); j++) {
+        pecMask[iNY + j] = 0;
+      }
+    }
+  }
+}
+
+// ── Field reset ──────────────────────────────────────────────────────────────
+function resetFields() {
+  Ez.fill(0); Hx.fill(0); Hy.fill(0);
+  screenAcc.fill(0);
+  simStep = 0;
+}
+
+// ── FDTD time step ───────────────────────────────────────────────────────────
+// 2-D TM mode: Ez, Hx (at j+½), Hy (at i+½).
+// Normalized units: dx=dy=1, c=1, dt=0.5, ε₀=μ₀=1.
+function fdtdStep() {
+  // 1. H update
+  for (let i = 0; i < NX - 1; i++) {
+    const base  = i * NY;
+    const base1 = base + NY;
+    for (let j = 0; j < NY - 1; j++) {
+      const k = base + j;
+      Hx[k] -= DT * (Ez[k + 1]      - Ez[k]);  // −∂Ez/∂y
+      Hy[k] += DT * (Ez[base1 + j]  - Ez[k]);  // +∂Ez/∂x
+    }
+  }
+
+  // 2. Ez update
+  for (let i = 1; i < NX; i++) {
+    const base  = i * NY;
+    const basem = base - NY;
+    for (let j = 1; j < NY; j++) {
+      const k = base + j;
+      Ez[k] += DT * ((Hy[k] - Hy[basem + j]) - (Hx[k] - Hx[k - 1]));
+    }
+  }
+
+  // 3. Soft source injection
+  const omega = 2 * Math.PI / N_LAM;
+  const base_src = I_SRC * NY;
+  for (const {j_pos, amp, phase} of srcGridPos) {
+    if (j_pos >= AY0 && j_pos < AY1 && amp > 1e-6) {
+      Ez[base_src + j_pos] += 0.08 * amp * Math.sin(omega * simStep + phase);
+    }
+  }
+
+  // 4. PEC enforcement + sponge absorber (single combined pass)
+  for (let k = 0; k < NX * NY; k++) {
+    if (!pecMask[k]) {
+      Ez[k] = 0; Hx[k] = 0; Hy[k] = 0;
+    } else {
+      const s = sponge[k];
+      Ez[k] *= s; Hx[k] *= s; Hy[k] *= s;
+    }
+  }
+
+  simStep++;
+}
+
+// ── Canvas / offscreen setup ─────────────────────────────────────────────────
+const canvas  = document.getElementById('field');
+const ctx     = canvas.getContext('2d');
+const offsc   = document.createElement('canvas');
+const offCtx  = offsc.getContext('2d');
+offsc.width   = ANX;
+offsc.height  = ANY;
+const imgData = offCtx.createImageData(ANX, ANY);
+const dpr     = window.devicePixelRatio || 1;
+
+// ── Coordinate helpers ───────────────────────────────────────────────────────
+function gridToCanvas(gi, gj, fx0, fy0, fw, fh) {
+  return {
+    cx: fx0 + (gi - AX0) / ANX * fw,
+    cy: fy0 + (1 - (gj - AY0) / ANY) * fh
+  };
+}
+function canvasToGrid(cx, cy, fx0, fy0, fw, fh) {
+  return {
+    i: Math.max(AX0, Math.min(AX1 - 1, Math.round(AX0 + (cx - fx0) / fw * ANX))),
+    j: Math.max(AY0, Math.min(AY1 - 1, Math.round(AY0 + (1 - (cy - fy0) / fh) * ANY)))
+  };
+}
+
+// ── Screen-line pointer/touch events ─────────────────────────────────────────
+function screenXpx() { return _fx0 + screenLam / XL_LAM * _fw; }
+
+canvas.addEventListener('mousedown', e => {
+  if (drawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  if (Math.abs(mx - screenXpx()) < 10) {
+    _screenDragging = true;
+    e.preventDefault();
+  }
+});
+canvas.addEventListener('mousemove', e => {
+  if (drawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  if (_screenDragging) {
+    screenLam = Math.max(1, Math.min(XL_LAM - 1, (mx - _fx0) / _fw * XL_LAM));
+    syncScrSlider();
+    screenAcc.fill(0);
+  } else {
+    canvas.style.cursor = Math.abs(mx - screenXpx()) < 10 ? 'ew-resize' : '';
+  }
+});
+canvas.addEventListener('mouseup',    () => { _screenDragging = false; });
+canvas.addEventListener('mouseleave', () => { _screenDragging = false; });
+
+canvas.addEventListener('touchstart', e => {
+  if (drawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.touches[0].clientX - rect.left;
+  if (Math.abs(mx - screenXpx()) < 20) {
+    _screenDragging = true; e.preventDefault();
+  }
+}, {passive: false});
+canvas.addEventListener('touchmove', e => {
+  if (drawMode || !_screenDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.touches[0].clientX - rect.left;
+  screenLam = Math.max(1, Math.min(XL_LAM - 1, (mx - _fx0) / _fw * XL_LAM));
+  syncScrSlider();
+  screenAcc.fill(0);
+  e.preventDefault();
+}, {passive: false});
+canvas.addEventListener('touchend', () => { _screenDragging = false; });
+
+function syncScrSlider() {
+  const sl = document.getElementById('sl-scr');
+  if (sl) {
+    sl.value = screenLam.toFixed(1);
+    document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  }
+}
+
+// ── Obstacle draw events ──────────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  if (!drawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  if (cx < _fx0 || cx > _fx0 + _fw || cy < _fy0 || cy > _fy0 + _fh) return;
+  drawStart = canvasToGrid(cx, cy, _fx0, _fy0, _fw, _fh);
+  drawCurrent = {...drawStart};
+  e.preventDefault();
+});
+canvas.addEventListener('mousemove', e => {
+  if (!drawMode || !drawStart) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  drawCurrent = canvasToGrid(cx, cy, _fx0, _fy0, _fw, _fh);
+});
+canvas.addEventListener('mouseup', e => {
+  if (!drawMode || !drawStart) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+  drawCurrent = canvasToGrid(cx, cy, _fx0, _fy0, _fw, _fh);
+  commitObstacle();
+});
+canvas.addEventListener('touchstart', e => {
+  if (!drawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.touches[0].clientX - rect.left, cy = e.touches[0].clientY - rect.top;
+  if (cx < _fx0 || cx > _fx0 + _fw || cy < _fy0 || cy > _fy0 + _fh) return;
+  drawStart = canvasToGrid(cx, cy, _fx0, _fy0, _fw, _fh);
+  drawCurrent = {...drawStart};
+  e.preventDefault();
+}, {passive: false});
+canvas.addEventListener('touchmove', e => {
+  if (!drawMode || !drawStart) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = e.touches[0].clientX - rect.left, cy = e.touches[0].clientY - rect.top;
+  drawCurrent = canvasToGrid(cx, cy, _fx0, _fy0, _fw, _fh);
+  e.preventDefault();
+}, {passive: false});
+canvas.addEventListener('touchend', () => {
+  if (!drawMode || !drawStart) return;
+  commitObstacle();
+});
+
+function commitObstacle() {
+  if (!drawStart || !drawCurrent) { drawStart = drawCurrent = null; return; }
+  const i0 = Math.min(drawStart.i, drawCurrent.i);
+  const i1 = Math.max(drawStart.i, drawCurrent.i);
+  const j0 = Math.min(drawStart.j, drawCurrent.j);
+  const j1 = Math.max(drawStart.j, drawCurrent.j);
+  if (i1 > i0 || j1 > j0) {
+    obstacles.push({i0, j0, i1, j1});
+    recomputePEC();
+  }
+  drawStart = drawCurrent = null;
+}
+
+// ── Tick helpers ─────────────────────────────────────────────────────────────
+function makeYTicks(half, includeZero) {
+  const step = half < 4 ? 1 : half < 10 ? 2 : half < 25 ? 5 : 10;
+  const arr = [];
+  for (let v = -Math.floor(half / step) * step; v <= half - step * 0.1; v += step) {
+    if (includeZero || Math.abs(v) > step * 0.1) arr.push(v);
+  }
+  return arr;
+}
+
+// ── Draw ─────────────────────────────────────────────────────────────────────
+function draw() {
+  const cssW = canvas.offsetWidth  || 800;
+  const cssH = canvas.offsetHeight || 500;
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw; canvas.height = ph;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W = cssW, H = cssH;
+  const XAXIS2_H = 30;
+  const FH       = H - XAXIS2_H;
+  const SCREEN_W = Math.max(100, Math.round(W * 0.20));
+  const FIELD_W  = W - SCREEN_W - 1;
+
+  const YAXIS_W     = 54;
+  const XAXIS_TOP_H = 28;
+  const fw   = FIELD_W - YAXIS_W;
+  const fh   = FH - XAXIS_TOP_H;
+  const fx0  = YAXIS_W;
+  const fy0  = XAXIS_TOP_H;
+  _fx0 = fx0; _fy0 = fy0; _fw = fw; _fh = fh;
+
+  const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
+  const PANEL  = isLight ? '#f0f2f8' : '#13151b';
+  const BORDER = isLight ? '#c8cbd8' : '#252830';
+  const AXIS   = isLight ? '#555e7a' : '#8898b8';
+  const GRID   = isLight ? '#d0d4e0' : '#222838';
+  const CYAN   = isLight ? '#1a7fb5' : '#6ed0ff';
+  const GOLD   = isLight ? '#a07020' : '#d4a85a';
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Fill Ez image ──────────────────────────────────────────────────────────
+  const px = imgData.data;
+  let s2 = 0;
+  for (let k = 0; k < NX * NY; k++) s2 += Ez[k] * Ez[k];
+  const scale = 1 / (Math.sqrt(s2 / (NX * NY)) * 4 + 1e-30);
+  for (let ix = 0; ix < ANX; ix++) {
+    const i = AX0 + ix, iNY = i * NY;
+    for (let iy = 0; iy < ANY; iy++) {
+      const j   = AY1 - 1 - iy;   // flip y: canvas top = j=AY1-1 = y=+7.5λ
+      const rgb = cmRGB(Math.tanh(Ez[iNY + j] * scale));
+      const idx = (iy * ANX + ix) * 4;
+      px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+    }
+  }
+  offCtx.putImageData(imgData, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(offsc, fx0, fy0, fw, fh);
+
+  // ── Helper: λ coord → canvas px ───────────────────────────────────────────
+  const xPx = xl => fx0 + xl / XL_LAM * fw;
+  const yPx = yl => fy0 + (YL_HALF - yl) / (2 * YL_HALF) * fh;
+
+  // ── Grid lines ────────────────────────────────────────────────────────────
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  for (let v = 2; v < XL_LAM; v += 2) {
+    const xp = xPx(v);
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+  }
+  makeYTicks(YL_HALF, true).forEach(v => {
+    const yp = yPx(v);
+    ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 + fw, yp); ctx.stroke();
+  });
+
+  // ── PEC obstacles ─────────────────────────────────────────────────────────
+  for (const obs of obstacles) {
+    const {cx: cx0, cy: cy0} = gridToCanvas(obs.i0, obs.j1, fx0, fy0, fw, fh);
+    const {cx: cx1, cy: cy1} = gridToCanvas(obs.i1 + 1, obs.j0 - 1, fx0, fy0, fw, fh);
+    const ow = cx1 - cx0, oh = cy1 - cy0;
+    ctx.fillStyle   = isLight ? 'rgba(50,50,50,0.70)' : 'rgba(200,200,200,0.45)';
+    ctx.fillRect(cx0, cy0, ow, oh);
+    ctx.strokeStyle = isLight ? '#333' : '#bbb';
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(cx0, cy0, ow, oh);
+  }
+
+  // ── Draw preview rectangle ─────────────────────────────────────────────────
+  if (drawStart && drawCurrent) {
+    const i0 = Math.min(drawStart.i, drawCurrent.i);
+    const i1 = Math.max(drawStart.i, drawCurrent.i);
+    const j0 = Math.min(drawStart.j, drawCurrent.j);
+    const j1 = Math.max(drawStart.j, drawCurrent.j);
+    const {cx: cx0, cy: cy0} = gridToCanvas(i0, j1, fx0, fy0, fw, fh);
+    const {cx: cx1, cy: cy1} = gridToCanvas(i1 + 1, j0 - 1, fx0, fy0, fw, fh);
+    ctx.strokeStyle = isLight ? 'rgba(80,80,80,0.9)' : 'rgba(230,230,230,0.9)';
+    ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    ctx.strokeRect(cx0, cy0, cx1 - cx0, cy1 - cy0);
+    ctx.setLineDash([]);
+  }
+
+  // ── Screen line ────────────────────────────────────────────────────────────
+  const xScr = xPx(screenLam);
+  ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh);
+  ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 7;
+  ctx.setLineDash([]); ctx.stroke();
+
+  // ── Source dots ────────────────────────────────────────────────────────────
+  for (const {j_pos, amp} of srcGridPos) {
+    if (amp < 1e-6) continue;
+    const {cx: xp, cy: yp} = gridToCanvas(I_SRC, j_pos, fx0, fy0, fw, fh);
+    if (yp < fy0 - 4 || yp > fy0 + fh + 4) continue;
+    ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = BG; ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+  }
+
+  // ── X-axis ticks ──────────────────────────────────────────────────────────
+  ctx.font = `300 14px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  for (let v = 2; v < XL_LAM; v += 2) {
+    const xp = xPx(v);
+    if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 - 5); ctx.stroke();
+    ctx.fillText(v, xp, fy0 - 6);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillText('x/λ', fx0 + fw, fy0 - 6);
+
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  makeYTicks(YL_HALF, false).forEach(v => {
+    const yp = yPx(v);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 - 5, yp); ctx.stroke();
+    ctx.fillText(v, fx0 - 8, yp);
+  });
+  ctx.save();
+  ctx.translate(fx0 / 2, fy0 + fh / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `400 14px 'DM Mono', monospace`;
+  ctx.fillText('y / λ', 0, 0);
+  ctx.restore();
+
+  ctx.beginPath(); ctx.moveTo(FIELD_W, 0); ctx.lineTo(FIELD_W, FH);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
+
+  // ── Intensity panel (right) ───────────────────────────────────────────────
+  const SX      = FIELD_W + 1;
+  const AXIS_W  = 46;
+  const CURVE_X0 = SX + AXIS_W + 1;
+  const iPW     = SCREEN_W - AXIS_W - 4;
+
+  ctx.fillStyle = PANEL;
+  ctx.fillRect(SX, 0, SCREEN_W, FH);
+
+  ctx.beginPath();
+  ctx.moveTo(SX + AXIS_W, fy0); ctx.lineTo(SX + AXIS_W, fy0 + fh);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
+
+  const scrYpx = v => fy0 + (YL_HALF - v) / (2 * YL_HALF) * fh;
+  ctx.font = `300 13px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  makeYTicks(YL_HALF, true).forEach(v => {
+    const yp = scrYpx(v);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillText(v, SX + AXIS_W - 7, yp);
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + SCREEN_W, yp);
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
+  });
+  ctx.font = `300 12px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('y/λ', SX + AXIS_W / 2, fy0);
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  [0.25, 0.5, 0.75, 1.0].forEach(f => {
+    const xp = CURVE_X0 + f * iPW;
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+  });
+
+  // FDTD intensity curve (cyan)
+  const Imax = Math.max(...screenAcc, 1e-30);
+  ctx.beginPath();
+  for (let iy = 0; iy < ANY; iy++) {
+    const xp = CURVE_X0 + (screenAcc[iy] / Imax) * iPW;
+    const yp = fy0 + (1 - iy / (ANY - 1)) * fh;
+    iy === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+  }
+  ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
+
+  // Analytical curve (gold dashed) — same formula as existing sim
+  if (N_SRC > 1) {
+    let I_peak = 0;
+    const I_buf = new Float32Array(ANY);
+    for (let iy = 0; iy < ANY; iy++) {
+      const yLam = -YL_HALF + (YL_HALF * 2) * iy / (ANY - 1);
+      let re = 0, im = 0;
+      for (let n = 0; n < N_SRC; n++) {
+        if (srcs[n].amp < 1e-6) continue;
+        const yn  = (n - (N_SRC - 1) / 2) * d_lam;
+        const r_n = Math.sqrt(screenLam * screenLam + (yLam - yn) * (yLam - yn));
+        const ph  = 2 * Math.PI * r_n - srcs[n].phase;
+        re += srcs[n].amp / r_n * Math.cos(ph);
+        im += srcs[n].amp / r_n * Math.sin(ph);
+      }
+      I_buf[iy] = re * re + im * im;
+      if (I_buf[iy] > I_peak) I_peak = I_buf[iy];
+    }
+    if (I_peak > 0) {
+      ctx.beginPath();
+      for (let iy = 0; iy < ANY; iy++) {
+        const xp = CURVE_X0 + (I_buf[iy] / I_peak) * iPW;
+        const yp = fy0 + (1 - iy / (ANY - 1)) * fh;
+        iy === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+      }
+      ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  const midX = SX + AXIS_W + (SCREEN_W - AXIS_W) / 2;
+  ctx.font = `300 13px 'DM Mono', monospace`;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('I (y)', midX, fy0 + 4);
+  ctx.fillText('x = ' + screenLam.toFixed(1) + 'λ', midX, fy0 + 18);
+  if (N_SRC > 1) { ctx.fillStyle = GOLD + 'bb'; ctx.fillText('— anal.', midX, fy0 + 32); }
+
+  // ── Bottom x-axis strip ────────────────────────────────────────────────────
+  ctx.beginPath(); ctx.moveTo(0, FH); ctx.lineTo(FIELD_W, FH);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+let fpsCount = 0, fpsLast = 0, fpsVal = 0;
+
+function render(ts) {
+  requestAnimationFrame(render);
+
+  if (!isPaused) {
+    for (let s = 0; s < stepsPerFrame; s++) fdtdStep();
+
+    // Update screen accumulator at current screen column
+    const i_scr = Math.min(Math.max(
+      Math.round(AX0 + screenLam * N_LAM), AX0), AX1 - 1);
+    const base_scr = i_scr * NY;
+    for (let iy = 0; iy < ANY; iy++) {
+      const v = Ez[base_scr + AY0 + iy];
+      screenAcc[iy] = screenAcc[iy] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+    }
+  }
+
+  fpsCount++;
+  if (ts - fpsLast > 1000) {
+    fpsVal = Math.round(fpsCount * 1000 / (ts - fpsLast));
+    fpsCount = 0; fpsLast = ts;
+    const el = document.getElementById('st-fps');
+    if (el) el.textContent = fpsVal + ' fps';
+  }
+  const elStep = document.getElementById('st-step');
+  if (elStep) elStep.textContent = simStep.toLocaleString();
+
+  draw();
+}
+
+// ── Sidebar source-row UI ────────────────────────────────────────────────────
+const selSrc  = document.getElementById('sel-src');
+const slSrcA  = document.getElementById('sl-src-a');
+const slSrcP  = document.getElementById('sl-src-p');
+const vlSrcA  = document.getElementById('val-src-a');
+const vlSrcP  = document.getElementById('val-src-p');
+let selectedSrc = 0;
+
+function buildRows() {
+  selSrc.innerHTML = '';
+  for (let n = 0; n < N_SRC; n++) {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = 'Quelle ' + (n + 1);
+    selSrc.appendChild(opt);
+  }
+  selectedSrc = Math.min(selectedSrc, N_SRC - 1);
+  selSrc.value = selectedSrc;
+  syncRows();
+}
+function syncRows() {
+  const s = srcs[selectedSrc];
+  slSrcA.value = Math.round(s.amp * 100);
+  slSrcP.value = Math.round((s.phase / Math.PI) * 100);
+  vlSrcA.textContent = s.amp.toFixed(2);
+  vlSrcP.textContent = (s.phase / Math.PI).toFixed(2) + 'π';
+}
+selSrc.addEventListener('change', () => {
+  selectedSrc = +selSrc.value; syncRows();
+});
+slSrcA.addEventListener('input', () => {
+  srcs[selectedSrc].amp = slSrcA.value / 100;
+  vlSrcA.textContent = srcs[selectedSrc].amp.toFixed(2);
+  updateSrcGridPos();
+});
+slSrcP.addEventListener('input', () => {
+  srcs[selectedSrc].phase = (slSrcP.value / 100) * Math.PI;
+  vlSrcP.textContent = srcs[selectedSrc].phase < 1e-9 ? '0.00π'
+    : (srcs[selectedSrc].phase / Math.PI).toFixed(2) + 'π';
+  updateSrcGridPos();
+});
+
+// ── Main slider event handlers ───────────────────────────────────────────────
+function readGlobals() {
+  const slF0    = document.getElementById('sl-f0');
+  const slD     = document.getElementById('sl-d');
+  const slN     = document.getElementById('sl-N');
+  const slScr   = document.getElementById('sl-scr');
+  const slSpeed = document.getElementById('sl-speed');
+
+  slF0.addEventListener('input', () => {
+    f0 = slF0.value * 1e8;
+    document.getElementById('val-f0').textContent = (f0 / 1e9).toFixed(2) + ' GHz';
+    updateStats();
+  });
+  slD.addEventListener('input', () => {
+    d_lam = slD.value / 100;
+    document.getElementById('val-d').textContent = d_lam.toFixed(2);
+    updateSrcGridPos();
+    resetFields();
+    updateStats();
+  });
+  slN.addEventListener('input', () => {
+    N_SRC = +slN.value;
+    document.getElementById('val-N').textContent = N_SRC;
+    buildRows();
+    updateSrcGridPos();
+    resetFields();
+    updateStats();
+  });
+  slScr.addEventListener('input', () => {
+    screenLam = +slScr.value;
+    document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+    screenAcc.fill(0);
+  });
+  slSpeed.addEventListener('input', () => {
+    stepsPerFrame = +slSpeed.value;
+    document.getElementById('val-speed').textContent = stepsPerFrame + ' Schr./Frame';
+  });
+
+  document.getElementById('btn-play').addEventListener('click', () => {
+    isPaused = !isPaused;
+    document.getElementById('btn-play').textContent = isPaused ? '▶' : '⏸';
+  });
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    isLight = !isLight;
+    document.body.classList.toggle('light', isLight);
+    document.getElementById('theme-toggle').textContent = isLight ? '☀' : '☾';
+  });
+}
+
+// ── Draw-mode toggle ──────────────────────────────────────────────────────────
+document.getElementById('btn-draw').addEventListener('click', () => {
+  drawMode = !drawMode;
+  document.getElementById('btn-draw').classList.toggle('active', drawMode);
+  canvas.classList.toggle('draw-mode', drawMode);
+  if (!drawMode) { drawStart = drawCurrent = null; }
+});
+document.getElementById('btn-clear-obs').addEventListener('click', () => {
+  obstacles = [];
+  recomputePEC();
+  resetFields();
+});
+
+// ── Presets ───────────────────────────────────────────────────────────────────
+// Wall column x=6λ, 2 cells wide: i=[140,141] (AX0 + 6*N_LAM = 140)
+// j_ctr = 169 (centre of NY=340)
+const WALL_I = AX0 + 6 * N_LAM;   // = 140
+const WALL_W = 2;                  // wall thickness in cells
+
+function setPresetArray(n, dlam) {
+  N_SRC = n;
+  d_lam = dlam;
+  document.getElementById('sl-N').value  = n;
+  document.getElementById('val-N').textContent = n;
+  document.getElementById('sl-d').value  = Math.round(dlam * 100);
+  document.getElementById('val-d').textContent = dlam.toFixed(2);
+  for (let i = 0; i < 100; i++) srcs[i] = {amp: 1.0, phase: 0.0};
+  buildRows();
+  updateSrcGridPos();
+}
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  setPresetArray(2, 1.5);
+  obstacles = []; recomputePEC();
+  screenLam = 7.0; syncScrSlider();
+  resetFields(); updateStats();
+});
+
+document.getElementById('btn-einzelspalt').addEventListener('click', () => {
+  setPresetArray(1, 1.5);
+  // Vertical PEC wall at x=6λ with a 2λ slit at centre
+  const slitHalf = N_LAM;  // 1λ = 20 cells each side → 2λ total
+  obstacles = [
+    {i0: WALL_I, j0: AY0, i1: WALL_I + WALL_W, j1: J_CTR - slitHalf - 1},
+    {i0: WALL_I, j0: J_CTR + slitHalf, i1: WALL_I + WALL_W, j1: AY1 - 1}
+  ];
+  screenLam = 8.0; syncScrSlider();
+  recomputePEC(); resetFields(); updateStats();
+});
+
+document.getElementById('btn-doppelspalt').addEventListener('click', () => {
+  setPresetArray(1, 1.5);
+  // Two 1λ slits, centres at ±2λ from axis
+  const slitHalf = Math.round(0.5 * N_LAM);  // 10 cells = 0.5λ each side → 1λ slit
+  const sep      = 2 * N_LAM;                // slit centres ±2λ
+  const j_lo_ctr = J_CTR - sep;
+  const j_hi_ctr = J_CTR + sep;
+  obstacles = [
+    {i0: WALL_I, j0: AY0,                    i1: WALL_I + WALL_W, j1: j_lo_ctr - slitHalf - 1},
+    {i0: WALL_I, j0: j_lo_ctr + slitHalf,    i1: WALL_I + WALL_W, j1: j_hi_ctr - slitHalf - 1},
+    {i0: WALL_I, j0: j_hi_ctr + slitHalf,    i1: WALL_I + WALL_W, j1: AY1 - 1}
+  ];
+  screenLam = 8.0; syncScrSlider();
+  recomputePEC(); resetFields(); updateStats();
+});
+
+document.getElementById('btn-reflektor').addEventListener('click', () => {
+  setPresetArray(2, 1.5);
+  // Partial vertical reflector at x=7λ, upper half only
+  const refl_i = AX0 + 7 * N_LAM;
+  obstacles = [
+    {i0: refl_i, j0: J_CTR, i1: refl_i + WALL_W, j1: AY1 - 1}
+  ];
+  screenLam = 5.0; syncScrSlider();
+  recomputePEC(); resetFields(); updateStats();
+});
+
+document.getElementById('btn-alt').addEventListener('click', () => {
+  setPresetArray(N_SRC, d_lam);
+  for (let n = 0; n < N_SRC; n++) srcs[n].phase = (n % 2) * Math.PI;
+  buildRows(); updateSrcGridPos(); resetFields();
+});
+
+document.getElementById('btn-beam').addEventListener('click', () => {
+  setPresetArray(Math.max(N_SRC, 4), d_lam);
+  for (let n = 0; n < N_SRC; n++) srcs[n].phase = n * 0.4 * Math.PI;
+  buildRows(); updateSrcGridPos(); resetFields();
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const lam = C_LIGHT / f0;
+  document.getElementById('st-lam').textContent = (lam * 100).toFixed(2) + ' cm';
+  const rFF = N_SRC <= 1 ? 0 : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
+  const rFFtext = N_SRC <= 1 ? '—'
+    : rFF > XL_LAM ? '> ' + XL_LAM.toFixed(0) + ' λ'
+    : rFF.toFixed(1) + ' λ';
+  document.getElementById('st-rff').textContent = rFFtext;
+}
+
+// ── Initialise ────────────────────────────────────────────────────────────────
+initSponge();
+updateSrcGridPos();
+buildRows();
+readGlobals();
+updateStats();
+document.getElementById('val-f0').textContent = (f0 / 1e9).toFixed(2) + ' GHz';
+
+// Pre-run to reach initial steady state (~1 transit time to default screen)
+for (let i = 0; i < 300; i++) fdtdStep();
+screenAcc.fill(0);  // discard transient in accumulator
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
