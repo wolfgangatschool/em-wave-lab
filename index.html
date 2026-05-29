@@ -63,7 +63,7 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 #btn-timeavg {
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
-  height: 28px; padding: 0 8px;
+  height: 42px; padding: 0 8px; line-height: 1.3;
   cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
@@ -178,9 +178,14 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .slider-group { margin-bottom: 7px; }
 .slider-group:last-child { margin-bottom: 0; }
 .slider-group.disabled { opacity: 0.35; pointer-events: none; }
+#sg-src-mod.disabled { opacity: 0.35; pointer-events: none; }
 .slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
 .slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
 .slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
+.slider-label.src-formula {
+  font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px;
+  color: var(--text-bright); justify-content: flex-start; gap: 4px;
+}
 .slider-info {
   display: grid; grid-template-columns: auto auto;
   column-gap: 6px; row-gap: 1px; margin-top: 4px;
@@ -407,7 +412,7 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 
   /* Play button — smaller on mobile */
   #btn-play { width: 26px; height: 26px; font-size: 13px; }
-  #btn-timeavg { font-size: 11px; height: 24px; }
+  #btn-timeavg { font-size: 11px; height: 38px; }
   #btn-fraunhofer { font-size: 11px; }
 
   /* Lock button: match btn-timeavg size on mobile */
@@ -634,40 +639,26 @@ self.onmessage = function(ev) {
       </div>
     </div>
 
-    <div class="sb-group">
-      <div class="sb-label">Quelle</div>
+    <div class="sb-group" id="sg-src-mod">
+      <div class="sb-label">Modifikation von Einzelquellen</div>
       <select class="src-select" id="sel-src"></select>
       <div class="slider-group" style="color:var(--text-dim)">
-        <div class="slider-label">
-          <span class="pname">A</span>
-          <span class="pval" id="val-src-a">1.00</span>
+        <div class="slider-label src-formula">
+          Amplituden A = <span class="pval" id="val-src-a">1.0 A₀</span>
         </div>
-        <input type="range" id="sl-src-a" min="0" max="100" step="1" value="100">
+        <input type="range" id="sl-src-a" min="0" max="20" step="1" value="10">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
-        <div class="slider-label">
-          <span class="pname">f ×</span>
-          <span class="pval" id="val-src-f">1.00×</span>
+        <div class="slider-label src-formula">
+          Frequenz f = <span class="pval" id="val-src-f">1.0 f₀</span>
         </div>
-        <input type="range" id="sl-src-f" min="50" max="200" step="25" value="100">
+        <input type="range" id="sl-src-f" min="0" max="20" step="1" value="10">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
-        <div class="slider-label">
-          <span class="pname">φ</span>
-          <span class="pval" id="val-src-p">0.00π</span>
+        <div class="slider-label src-formula">
+          Phase φ = φ₀ <span class="pval" id="val-src-p">+0.0π</span>
         </div>
-        <input type="range" id="sl-src-p" min="-200" max="200" step="25" value="0">
-      </div>
-    </div>
-
-    <div class="sb-group">
-      <div class="sb-label">Ansicht</div>
-      <div class="slider-group" style="color:var(--text-dim)">
-        <div class="slider-label">
-          <span class="pname">Schirm</span>
-          <span class="pval" id="val-scr">10.0 λ</span>
-        </div>
-        <input type="range" id="sl-scr" min="1" max="10" value="10" step="0.5">
+        <input type="range" id="sl-src-p" min="-10" max="10" step="1" value="0">
       </div>
     </div>
 
@@ -730,7 +721,7 @@ self.onmessage = function(ev) {
         </div>
       </div>
       <div class="ctrl-area" id="ctrl-area">
-        <button id="btn-timeavg">Zeitgemittelt</button>
+        <button id="btn-timeavg">Normiert und<br>zeitgemittelt</button>
       </div>
     </div>
     <div class="canvas-wrap">
@@ -748,7 +739,7 @@ self.onmessage = function(ev) {
         <input type="range" id="sl-xl1" min="1" max="100" value="12" step="1">
         <span class="ax-val" id="val-xl1">12 λ</span>
       </div>
-      <button id="btn-fraunhofer">Zentriere auf<br>Fraunhofer Abstand</button>
+      <button id="btn-fraunhofer">Zentriere auf<br>Fernfeldgrenze</button>
     </div>
   </div>
 
@@ -1815,19 +1806,33 @@ function buildRows() {
 
 function syncRows() {
   const s = srcs[selectedSrc];
-  slSrcA.value = Math.round(s.amp * 100);
-  slSrcF.value = Math.round(s.fmul * 100);
-  slSrcP.value = Math.round((s.phase / Math.PI) * 100);
-  vlSrcA.textContent = s.amp.toFixed(2);
-  vlSrcF.textContent = s.fmul.toFixed(2) + '×';
-  vlSrcP.textContent = (s.phase / Math.PI).toFixed(2) + 'π';
+  slSrcA.value = Math.round(s.amp  * 10);
+  slSrcF.value = Math.round(s.fmul * 10);
+  slSrcP.value = Math.round(s.phase / Math.PI * 5);
+  vlSrcA.textContent = (slSrcA.value / 10).toFixed(1) + ' A₀';
+  vlSrcF.textContent = (slSrcF.value / 10).toFixed(1) + ' f₀';
+  const phFrac = slSrcP.value * 0.2;
+  vlSrcP.textContent = (phFrac >= 0 ? '+' : '−') + Math.abs(phFrac).toFixed(1) + 'π';
   screenAcc.fill(0);
 }
 
 selSrc.addEventListener('change', () => { selectedSrc = Number(selSrc.value); syncRows(); });
-slSrcA.addEventListener('input', () => { srcs[selectedSrc].amp   = slSrcA.value / 100; vlSrcA.textContent = (slSrcA.value / 100).toFixed(2);                  screenAcc.fill(0); acc2D.fill(0); });
-slSrcF.addEventListener('input', () => { srcs[selectedSrc].fmul  = slSrcF.value / 100; vlSrcF.textContent = (slSrcF.value / 100).toFixed(2) + '×';            screenAcc.fill(0); acc2D.fill(0); });
-slSrcP.addEventListener('input', () => { srcs[selectedSrc].phase = (slSrcP.value / 100) * Math.PI; vlSrcP.textContent = (slSrcP.value / 100).toFixed(2) + 'π'; screenAcc.fill(0); acc2D.fill(0); });
+slSrcA.addEventListener('input', () => {
+  srcs[selectedSrc].amp  = slSrcA.value / 10;
+  vlSrcA.textContent = (slSrcA.value / 10).toFixed(1) + ' A₀';
+  screenAcc.fill(0); acc2D.fill(0);
+});
+slSrcF.addEventListener('input', () => {
+  srcs[selectedSrc].fmul = slSrcF.value / 10;
+  vlSrcF.textContent = (slSrcF.value / 10).toFixed(1) + ' f₀';
+  screenAcc.fill(0); acc2D.fill(0);
+});
+slSrcP.addEventListener('input', () => {
+  srcs[selectedSrc].phase = slSrcP.value * Math.PI / 5;
+  const phFrac = slSrcP.value * 0.2;
+  vlSrcP.textContent = (phFrac >= 0 ? '+' : '−') + Math.abs(phFrac).toFixed(1) + 'π';
+  screenAcc.fill(0); acc2D.fill(0);
+});
 
 function readGlobals() {
   const newN = Number(document.getElementById('sl-N').value);
@@ -1928,6 +1933,7 @@ function applyMode() {
   isDipolMode = document.getElementById('sel-mode').value === 'dipol';
   document.getElementById('sg-punkt').style.display  = isDipolMode ? 'none' : '';
   document.getElementById('sg-dipole').style.display = isDipolMode ? ''     : 'none';
+  document.getElementById('sg-src-mod').classList.toggle('disabled', isDipolMode);
   screenAcc.fill(0);
   wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
   recompute();
@@ -2007,13 +2013,7 @@ document.getElementById('btn-lock').addEventListener('click', () => {
   }
 });
 
-document.getElementById('sl-scr').addEventListener('input', () => {
-  screenOverride = true;
-  screenLam = Number(document.getElementById('sl-scr').value);
-  document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
-  screenAcc.fill(0); acc2D.fill(0);
-  updateStats();
-});
+
 
 document.getElementById('chk-efield').addEventListener('change', e => { showEField = e.target.checked; });
 document.getElementById('chk-bfield').addEventListener('change', e => { showBField = e.target.checked; });
@@ -2148,6 +2148,7 @@ document.addEventListener('touchstart', e => {
 requestAnimationFrame(render);
 // Apply initial dipole UI state after all variables are declared
 document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
+document.getElementById('sg-src-mod').classList.toggle('disabled', isDipolMode);
 document.getElementById('val-L').textContent = L_lam.toFixed(3).replace(/\.?0+$/, '');
 </script>
 </body>
