@@ -651,7 +651,7 @@ self.onmessage = function(ev) {
             <span class="pname">Anzahl (N)</span>
             <span class="pval" id="val-N">2</span>
           </div>
-          <input type="range" id="sl-N" min="1" max="100" value="2" step="1">
+          <input type="range" id="sl-N" min="1" max="1000" value="2" step="1">
         </div>
         <div class="slider-group" id="sg-d" style="color:var(--blue)">
           <div class="slider-info">
@@ -879,12 +879,20 @@ let d_unit_idx  = 3;  // mm
 const F0_SCALES = [{l:'µHz',s:1e-6},{l:'mHz',s:1e-3},{l:'Hz',s:1},{l:'kHz',s:1e3},{l:'MHz',s:1e6},{l:'GHz',s:1e9},{l:'THz',s:1e12}];
 let f0_unit_idx = 5;  // GHz
 
-let srcs = Array.from({length: 100}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+const MAX_SRC = 1000;
+let srcs = Array.from({length: MAX_SRC}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+
+// Above this N, skip Liénard-Wiechert worker and use scalar phasor model instead
+const WS_LW_THRESHOLD = 30;
 
 let lam, k0, T_per;
 const xGrid = new Float64Array(NX);
 const yGrid = new Float64Array(NY);
-const R_mat = new Float64Array(100 * NX * NY);
+
+// Phasor precomputation: Z(x,y) = Σ_n (aₙ/rₙ) exp(i(φₙ−k·rₙ)) grouped by fmul
+// Per frame: E(x,y,t) = Re[exp(iωt)·Z] = Zre·cos(ωt) − Zim·sin(ωt)  →  O(NX×NY) per frame
+const _phasors = {};   // fmul_key → { re: Float32Array, im: Float32Array, omega: number }
+let _phasorsValid = false;
 
 const screenAcc   = new Float64Array(NY);  // EMA of Ez² → time-average ≈ ½A²
 const screenInst  = new Float64Array(NY);  // instantaneous Ez² for blue curve
@@ -911,6 +919,7 @@ const imgData = offCtx.createImageData(NX, NY);
 
 // cached layout from last draw() call — used by drag handler
 let _layoutFx0 = 54, _layoutFw = 600, _layoutFy0 = 28, _layoutFh = 400;
+let _lockEnforceFw = 0, _lockEnforceFh = 0;
 
 let _screenDragging = false;
 let _pinchStartDist = null, _pinchStartDx = 0, _pinchStartDy = 0;
@@ -1041,47 +1050,72 @@ function recompute() {
     document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
   }
 
-  const D = d_lam * lam;
   for (let i = 0; i < NX; i++)
     xGrid[i] = (XL0 + (XL1 - XL0) * i / (NX - 1)) * lam;
   for (let j = 0; j < NY; j++)
     yGrid[j] = (YL0 + (YL1 - YL0) * j / (NY - 1)) * lam;
-  for (let n = 0; n < N_SRC; n++) {
-    const yn = (n - (N_SRC - 1) / 2) * D;
-    const base = n * NX * NY;
-    for (let i = 0; i < NX; i++) {
-      const dx = xGrid[i];
-      for (let j = 0; j < NY; j++) {
-        const dy = yGrid[j] - yn;
-        R_mat[base + i * NY + j] = Math.sqrt(dx*dx + dy*dy);
-      }
-    }
-  }
   for (let i = 0; i < NX; i++)
     for (let j = 0; j < NY; j++)
       rEff[i*NY+j] = Math.sqrt(xGrid[i]*xGrid[i] + yGrid[j]*yGrid[j]) + 1e-10;
+  computePhasors();
+  // For large N skip the LW worker; null out stale results
+  if (N_SRC > WS_LW_THRESHOLD) { wsLatestEz = null; wsLatestBx = null; wsLatestBy = null; }
   screenAcc.fill(0);
   acc2D.fill(0);
   updateStats();
 }
 
-function computeField(t) {
-  const Ez = new Float32Array(NX * NY);
+function computePhasors() {
+  _phasorsValid = false;
+  for (const k in _phasors) delete _phasors[k];
+  const D = d_lam * lam;
+  const minR = MIN_R_LAM * lam;
   for (let n = 0; n < N_SRC; n++) {
     const {amp, fmul, phase} = srcs[n];
     if (amp < 1e-6) continue;
-    const om = fmul * 2 * Math.PI * f0;
-    const kn = om / C_LIGHT;
-    const ph = om * t + phase;
-    const base = n * NX * NY;
+    const key = fmul.toFixed(4);
+    if (!_phasors[key]) {
+      _phasors[key] = {
+        re: new Float32Array(NX * NY),
+        im: new Float32Array(NX * NY),
+        omega: fmul * 2 * Math.PI * f0
+      };
+    }
+    const g = _phasors[key];
+    const kn = fmul * 2 * Math.PI * f0 / C_LIGHT;
+    const yn = (n - (N_SRC - 1) / 2) * D;
     for (let i = 0; i < NX; i++) {
-      const b2 = base + i * NY;
+      const dx = xGrid[i];
+      const iNY = i * NY;
       for (let j = 0; j < NY; j++) {
-        const r = R_mat[b2 + j];
-        if (r < MIN_R_LAM * lam) continue;
-        Ez[i * NY + j] += (amp / (r + 1e-10)) * Math.cos(ph - kn * r);
+        const dy = yGrid[j] - yn;
+        const r = Math.sqrt(dx*dx + dy*dy);
+        if (r < minR) continue;
+        const phi = phase - kn * r;
+        const ri = amp / r;
+        g.re[iNY + j] += ri * Math.cos(phi);
+        g.im[iNY + j] += ri * Math.sin(phi);
       }
     }
+  }
+  // Exact time-average: <Ez²> = ½|Z|²  (cross-freq terms vanish over time)
+  acc2D.fill(0);
+  for (const key in _phasors) {
+    const g = _phasors[key];
+    for (let k = 0; k < NX * NY; k++)
+      acc2D[k] += 0.5 * (g.re[k] * g.re[k] + g.im[k] * g.im[k]);
+  }
+  _phasorsValid = true;
+}
+
+function computeField(t) {
+  const Ez = new Float32Array(NX * NY);
+  for (const key in _phasors) {
+    const g = _phasors[key];
+    const ct = Math.cos(g.omega * t);
+    const st = Math.sin(g.omega * t);
+    for (let k = 0; k < NX * NY; k++)
+      Ez[k] += g.re[k] * ct - g.im[k] * st;
   }
   return Ez;
 }
@@ -1148,13 +1182,17 @@ function render(ts) {
       wsLatestBy = new Float32Array(NX * NY);
     }
     for (let _i = 0; _i < NX * NY; _i++) wsLatestBy[_i] = -Ez[_i] / C_LIGHT;
+    if (!isPaused)
+      for (let k = 0; k < NX * NY; k++)
+        acc2D[k] = acc2D[k] * (1 - ACC2D_DECAY) + Ez[k] * Ez[k] * ACC2D_DECAY;
   } else {
-    Ez = (wsActive && wsLatestEz) ? wsLatestEz : computeField(simTime * T_per);
+    const useLW = wsActive && wsLatestEz && N_SRC <= WS_LW_THRESHOLD;
+    Ez = useLW ? wsLatestEz : computeField(simTime * T_per);
+    // LW path: accumulate EMA. Phasor path: acc2D is already exact time average from computePhasors()
+    if (!isPaused && useLW)
+      for (let k = 0; k < NX * NY; k++)
+        acc2D[k] = acc2D[k] * (1 - ACC2D_DECAY) + Ez[k] * Ez[k] * ACC2D_DECAY;
   }
-
-  if (!isPaused)
-    for (let k = 0; k < NX * NY; k++)
-      acc2D[k] = acc2D[k] * (1 - ACC2D_DECAY) + Ez[k] * Ez[k] * ACC2D_DECAY;
 
   const px = imgData.data;
   if (showTimeAvg) {
@@ -1329,6 +1367,25 @@ function aspectYHalf(xl1) {
 function aspectXL1(yh) {
   return _layoutFh > 0 ? yh * 2 * _layoutFw / _layoutFh : yh * 2;
 }
+function rescaleAxesForArray(oldArrayLam) {
+  const newArrayLam = Math.max(1, N_SRC - 1) * d_lam;
+  if (oldArrayLam <= 0 || newArrayLam === oldArrayLam) return;
+  const ratio = newArrayLam / oldArrayLam;
+  const slYl = document.getElementById('sl-yl');
+  ylHalf = Math.max(Number(slYl.min) || 0.5, Math.min(Number(slYl.max) || 30, ylHalf * ratio));
+  yPhysHalf = ylHalf * lam;
+  YL0 = -ylHalf; YL1 = ylHalf;
+  slYl.value = ylHalf.toFixed(3);
+  document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+  if (scaleLocked) {
+    const slXl1 = document.getElementById('sl-xl1');
+    XL1 = Math.max(Number(slXl1.min) || 1, Math.min(Number(slXl1.max) || 100, XL1 * ratio));
+    xPhysMax = XL1 * lam;
+    slXl1.value = XL1.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+  }
+  recompute();
+}
 
 function updateAxisSliders() {
   const slXl1 = document.getElementById('sl-xl1');
@@ -1365,14 +1422,30 @@ function updateAxisSliders() {
   const sliderH = Math.max(20, _layoutFh - textH - gap);
   slYl.style.height = sliderH + 'px';
 
-  // On first valid layout, initialise y to match x scale
+  // On first valid layout, enforce equal scale if locked
   if (!_axisInit && lam > 0) {
     _axisInit = true;
+    if (scaleLocked) {
+      ylHalf = aspectYHalf(XL1);
+      YL0 = -ylHalf; YL1 = ylHalf;
+    }
     yPhysHalf = ylHalf * lam;
     xPhysMax  = XL1 * lam;
     slYl.value = ylHalf.toFixed(3);
     document.getElementById('val-yl').textContent = fmtLam(ylHalf);
     document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    _lockEnforceFw = _layoutFw; _lockEnforceFh = _layoutFh;
+  }
+
+  // Re-enforce equal scale on window resize while locked
+  if (scaleLocked && _axisInit && (_layoutFw !== _lockEnforceFw || _layoutFh !== _lockEnforceFh)) {
+    _lockEnforceFw = _layoutFw; _lockEnforceFh = _layoutFh;
+    ylHalf = aspectYHalf(XL1);
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slYl.value = ylHalf.toFixed(3);
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+    recompute();
   }
 }
 
@@ -1488,7 +1561,7 @@ function draw() {
   ctx.font = fTickB;
   ctx.fillStyle = GOLD;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('Schirm', xScr + 6, fy0 + 4);
+  ctx.fillText('Schirm', xScr + 6, fy0 + 4 + (isMob ? 14 : 18));
 
   if (isDipolMode) {
     const x0 = xPx(0);
@@ -1764,17 +1837,19 @@ function updateStats() {
   const TIME_U = [{l:'s',s:1},{l:'ms',s:1e-3},{l:'µs',s:1e-6},{l:'ns',s:1e-9},{l:'ps',s:1e-12},{l:'fs',s:1e-15}];
   const pick = (arr, val) => arr.find(u => val / u.s >= 0.5) || arr[arr.length - 1];
 
+  const pu = l => l.length < 2 ? l + ' ' : l;  // pad unit to 2 chars
+
   const uLam = pick(DIST_U, lam);
-  document.getElementById('st-lam').textContent = (lam / uLam.s).toFixed(2) + ' ' + uLam.l;
+  document.getElementById('st-lam').textContent = (lam / uLam.s).toFixed(2) + ' ' + pu(uLam.l);
 
   const uT = pick(TIME_U, T_per);
-  document.getElementById('st-T').textContent = (T_per / uT.s).toFixed(2) + ' ' + uT.l;
+  document.getElementById('st-T').textContent = (T_per / uT.s).toFixed(2) + ' ' + pu(uT.l);
 
   let rFFtext = '—';
   if (!isNaN(rFF) && rFF > 0) {
     const rFFm = rFF * lam;
     const uR = pick(DIST_U, rFFm);
-    rFFtext = (rFFm / uR.s).toFixed(2) + ' ' + uR.l;
+    rFFtext = (rFFm / uR.s).toFixed(2) + ' ' + pu(uR.l);
   }
   document.getElementById('st-rff').textContent = rFFtext;
   const btnFr = document.getElementById('btn-fraunhofer');
@@ -1848,7 +1923,11 @@ function readGlobals() {
   document.getElementById('val-N').textContent = newN;
   updateDDisplay();
 }
-document.getElementById('sl-N').addEventListener('input', readGlobals);
+document.getElementById('sl-N').addEventListener('input', () => {
+  const oldArr = Math.max(1, N_SRC - 1) * d_lam;
+  readGlobals();
+  rescaleAxesForArray(oldArr);
+});
 
 function lamStr() {
   const LAM_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
@@ -1909,7 +1988,7 @@ function updateDDisplay() {
   document.getElementById('btn-d-unit').value = u.l;
   document.getElementById('val-d-phys').textContent = Math.round(v);
   const stDLam = document.getElementById('st-d-lam');
-  if (stDLam) stDLam.textContent = d_lam.toFixed(2);
+  if (stDLam) stDLam.textContent = d_lam.toFixed(2) + '   ';
   const ndRow = document.getElementById('st-nd-row');
   const ndEl  = document.getElementById('st-nd');
   const showNd = !isDipolMode && N_SRC > 1;
@@ -1918,17 +1997,21 @@ function updateDDisplay() {
     const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
     const nd_m = N_SRC * d_m;
     const uNd = DIST_U.find(u => nd_m / u.s >= 0.5) || DIST_U[DIST_U.length - 1];
-    ndEl.textContent = (nd_m / uNd.s).toFixed(2) + ' ' + uNd.l;
+    const puNd = uNd.l.length < 2 ? uNd.l + ' ' : uNd.l;
+    ndEl.textContent = (nd_m / uNd.s).toFixed(2) + ' ' + puNd;
   }
 }
 
 const _slD = document.getElementById('sl-d');
 _slD.addEventListener('input', function() {
+  const oldArr = Math.max(1, N_SRC - 1) * d_lam;
   d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
   readGlobals();
   updateDDisplay();
+  rescaleAxesForArray(oldArr);
 });
 _slD.addEventListener('change', function() {
+  const oldArr = Math.max(1, N_SRC - 1) * d_lam;
   const v = Number(this.value);
   if (v >= 1000 && d_unit_idx < D_SCALES.length - 1) {
     d_unit_idx++; this.value = 1;
@@ -1938,6 +2021,7 @@ _slD.addEventListener('change', function() {
   d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
   readGlobals();
   updateDDisplay();
+  rescaleAxesForArray(oldArr);
 });
 
 document.getElementById('btn-d-unit').addEventListener('change', function() {
@@ -2027,11 +2111,12 @@ document.getElementById('btn-lock').addEventListener('click', () => {
   if (scaleLocked) {
     // Snap y to match current x scale on lock activation
     const slYl = document.getElementById('sl-yl');
-    ylHalf    = Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)));
+    ylHalf    = aspectYHalf(XL1);
     yPhysHalf = ylHalf * lam;
     YL0 = -ylHalf; YL1 = ylHalf;
     slYl.value = ylHalf.toFixed(3);
     document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+    _lockEnforceFw = _layoutFw; _lockEnforceFh = _layoutFh;
     recompute();
   }
 });
@@ -2108,7 +2193,7 @@ function _paramKey() {
 }
 
 function wsSendParams() {
-  if (!wsActive || wsPending || !_worker) return;
+  if (!wsActive || wsPending || !_worker || N_SRC > WS_LW_THRESHOLD) return;
   const key = _paramKey();
   const paramsChanged = key !== _lastParamKey;
   _lastParamKey = key;
