@@ -1,0 +1,3232 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>EM-Wave Lab · Dual Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:         #0a0b0e;
+  --panel:      #13151b;
+  --panel2:     #181b22;
+  --border:     #252830;
+  --text:       #d4d8e4;
+  --text-dim:   #8a94a8;
+  --text-bright:#e4e6ee;
+  --gold:       #d4a85a;
+  --blue:       #6ed0ff;
+  --orange:     #ffb455;
+  --red:        #ff7070;
+  --radius:     12px;
+  --radius-sm:  8px;
+  --sidebar-w:  315px;
+}
+body.light {
+  --bg:         #f5f6fa;
+  --panel:      #ffffff;
+  --panel2:     #eef0f6;
+  --border:     #c8cbd8;
+  --text:       #2a2d3a;
+  --text-dim:   #555e7a;
+  --text-bright:#1a1d2e;
+  --gold:       #a07020;
+  --blue:       #1a7fb5;
+  --orange:     #c06000;
+  --red:        #c0302a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 14px;
+  font-weight: 300; line-height: 1.5;
+  display: flex; flex-direction: column;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--panel); }
+.header-inner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+}
+.header-title {
+  font-family: 'DM Mono', monospace; font-size: 24px;
+  font-weight: 600; color: var(--text-bright); letter-spacing: .08em;
+  flex-shrink: 0; white-space: nowrap; margin-right: 16px;
+}
+.header-controls {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center;
+  gap: 8px;
+}
+.header-speed {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1; min-width: 60px;
+  /* max-width set by JS to align right edge with canvas midpoint */
+}
+.header-speed input[type=range] {
+  width: 100%; -webkit-appearance: none; appearance: none;
+  color: var(--text-dim); touch-action: none;
+}
+.header-right {
+  flex: 0 0 auto;
+  display: flex; align-items: center;
+  gap: 8px;
+}
+.canvas-top-bar {
+  display: flex; align-items: center; flex-shrink: 0;
+  padding: 4px 0;
+}
+#btn-timeavg {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 28px; padding: 0 8px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; flex: 0 0 auto;
+}
+#btn-timeavg:hover { opacity: 1; }
+#btn-timeavg.active {
+  color: var(--gold); border-color: var(--gold); opacity: 1;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
+#btn-fraunhofer {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 28px; padding: 0 8px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap; flex: 0 0 auto;
+}
+#btn-fraunhofer:hover { opacity: 1; }
+#btn-fraunhofer:disabled { opacity: 0.25; cursor: default; }
+.load-area {
+  flex: 1; position: relative;
+}
+.load-bar-wrap {
+  height: 3px; border-radius: 2px;
+  background: var(--border); overflow: hidden;
+}
+.load-bar {
+  height: 100%; width: 0%; border-radius: 2px;
+  background: var(--gold);
+}
+.load-text {
+  position: absolute; bottom: calc(100% + 2px); left: 0; right: 0;
+  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: .08em;
+  color: var(--text-dim); text-align: center;
+  opacity: 0; pointer-events: none; user-select: none;
+}
+/* ── Play + tempo control group ────────────────────────────────────── */
+.ctrl-area {
+  flex-shrink: 0;
+  display: flex; align-items: center;
+  overflow: visible;
+}
+.tempo-area {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.tempo-area input[type=range] {
+  width: 100%; -webkit-appearance: none; appearance: none;
+  color: var(--text-dim); touch-action: none;
+}
+.tempo-val {
+  font: 300 10px 'DM Mono', monospace;
+  color: var(--text-dim); letter-spacing: .04em; white-space: nowrap;
+  text-align: center; overflow: hidden;
+}
+
+/* reloading state: static full bar + blinking text */
+.load-area.reloading .load-bar {
+  width: 100% !important; transform: none; opacity: 0.35;
+}
+.load-area.reloading .load-text {
+  animation: blink 1.4s ease-in-out infinite;
+}
+@keyframes loadslide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 0.7; }
+}
+.header-btn {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 15px; width: 28px; height: 28px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
+}
+.header-btn:hover { border-color: var(--text-dim); color: var(--text-bright); }
+.theme-toggle { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 15px; width: 28px; height: 28px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s; flex-shrink: 0;
+}
+.theme-toggle:hover { border-color: var(--text-dim); color: var(--text-bright); }
+
+/* ── Engine switcher ─────────────────────────────────────────────── */
+.engine-switch { display: flex; gap: 0; flex-shrink: 0; }
+.engine-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 28px; padding: 0 10px; cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s; letter-spacing: .04em;
+}
+.engine-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.engine-btn:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+.engine-btn.active {
+  color: var(--gold); border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
+.engine-btn:not(.active):hover { border-color: var(--text-dim); color: var(--text-bright); }
+
+/* ── FDTD obstacle drawing ───────────────────────────────────────── */
+.obstacle-btns { display: flex; gap: 5px; }
+.obstacle-btns button {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  padding: 5px 4px; cursor: pointer; transition: border-color .15s, color .15s;
+}
+.obstacle-btns button:hover { border-color: var(--text-dim); color: var(--text); }
+.obstacle-btns button.active { border-color: var(--gold); color: var(--gold); }
+canvas#field.draw-mode { cursor: crosshair; }
+
+/* ── App: sidebar + canvas ──────────────────────────────────────── */
+.app { display: flex; flex: 1; min-height: 0; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-content::-webkit-scrollbar { width: 3px; }
+.sidebar-content::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sb-group { padding: 6px 11px 10px; border-bottom: 1px solid var(--border); }
+.sb-group:last-child { border-bottom: none; }
+
+.sb-label {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  letter-spacing: .15em; text-transform: uppercase; color: var(--gold);
+  padding-bottom: 5px;
+}
+
+.slider-group { margin-bottom: 7px; }
+.slider-group:last-child { margin-bottom: 0; }
+.slider-group.disabled { opacity: 0.35; pointer-events: none; }
+#sg-src-mod.disabled { opacity: 0.35; pointer-events: none; }
+.slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
+.slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
+.slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
+.slider-label.src-formula {
+  font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px;
+  color: var(--text-bright); justify-content: space-between; gap: 4px;
+}
+.slider-label.src-formula .src-eq { white-space: nowrap; }
+.slider-info {
+  display: grid; grid-template-columns: auto auto;
+  column-gap: 6px; row-gap: 1px; margin-top: 4px;
+  justify-content: start;
+}
+.slider-info .si-label { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); white-space: nowrap; text-align: right; }
+.slider-info .si-dim   { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); white-space: nowrap; text-align: right; }
+.slider-info .si-val   { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); display: flex; align-items: baseline; gap: 4px; }
+
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 2px;
+  background: var(--border); outline: none; border-radius: 999px; cursor: pointer;
+}
+/* ── Slider + step-controls wrapper ── */
+.sl-wrap { display: flex; align-items: center; gap: 5px; }
+.sl-wrap > input[type=range] { flex: 2; min-width: 0; width: auto !important; }
+.sl-controls { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sl-numbox {
+  box-sizing: border-box; height: 19px;
+  font-family: 'DM Mono', monospace; font-size: 11px; text-align: right;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-bright); padding: 0 3px; outline: none;
+  -moz-appearance: textfield; vertical-align: baseline;
+}
+.sl-val-suffix {
+  font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim);
+}
+.sl-numbox::-webkit-inner-spin-button,
+.sl-numbox::-webkit-outer-spin-button { display: none; }
+.sl-numbox:focus { border-color: var(--gold); }
+.sl-btns { display: flex; gap: 1px; }
+.sl-btn {
+  flex: 1; height: 19px; min-width: 0; padding: 0;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  user-select: none; -webkit-user-select: none;
+}
+.sl-btn:hover { color: var(--text-bright); border-color: var(--text-dim); }
+.sl-btn:active { background: var(--border); }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid currentColor; background: var(--bg); cursor: pointer;
+  transition: transform .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+input[type=range]::-moz-range-thumb {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid currentColor; background: var(--bg); cursor: pointer;
+}
+
+select.src-select {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 3px 6px; outline: none; cursor: pointer; margin-bottom: 7px;
+  -webkit-appearance: none; appearance: none;
+}
+select.src-select option { background: var(--panel); }
+select.src-select:focus { border-color: var(--text-dim); }
+
+.toggle-row { display: flex; flex-direction: column; gap: 6px; padding: 2px 0; user-select: none; }
+.toggle-row label {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-dim);
+}
+.toggle-row input[type=checkbox] { accent-color: var(--gold); width: 12px; height: 12px; cursor: pointer; flex-shrink: 0; }
+
+.preset-stack { display: flex; flex-direction: column; gap: 4px; }
+.preset-btn {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 5px 9px; cursor: pointer; transition: border-color .15s, color .15s;
+  letter-spacing: .04em; text-align: left; width: 100%;
+}
+.preset-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+.unit-btn {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
+  padding: 1px 4px; cursor: pointer; transition: border-color .15s, color .15s;
+  vertical-align: middle; line-height: 1.4; outline: none;
+  -webkit-appearance: none; appearance: none;
+  width: 4.2ch;
+}
+.unit-btn:hover { border-color: var(--text-dim); color: var(--text-bright); }
+.unit-btn option { background: var(--panel); }
+
+/* ── Bottom parameter bar ────────────────────────────────────────── */
+.bottom-presets { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.preset-drop { width: 100%; }
+.bstat { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; }
+.bstat-key { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: .04em; color: var(--text-dim); white-space: nowrap; }
+.bstat-val { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-bright); white-space: nowrap; }
+
+/* ── Canvas area ─────────────────────────────────────────────────── */
+.canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); display: flex; flex-direction: column; }
+.canvas-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
+
+/* ── Axis-range sliders ───────────────────────────────────────────── */
+:root { --sl-track: 3px; --sl-thumb: 14px; }
+@media (max-width: 900px) { :root { --sl-track: 5px; --sl-thumb: 20px; } }
+
+#y-slider-strip {
+  position: absolute; left: 8px; top: 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; z-index: 5; overflow: visible; pointer-events: none;
+}
+#val-yl {
+  position: absolute;
+  left: 50%; transform: translateX(-50%) rotate(180deg);
+  writing-mode: vertical-lr;
+  font: 300 14px 'DM Mono', monospace;
+  color: var(--text-dim); white-space: nowrap;
+  z-index: 3;
+}
+#y-slider-strip input[type="range"] {
+  writing-mode: vertical-lr; direction: rtl;
+  margin: 0; cursor: ns-resize;
+  width: var(--sl-thumb); pointer-events: all;
+}
+#overlay-xl1 {
+  position: absolute; bottom: 8px;
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  pointer-events: none;
+}
+#overlay-xl1 input[type="range"] { pointer-events: all; margin: 0; }
+.ax-val {
+  font: 300 14px 'DM Mono', monospace;
+  color: var(--text-dim); white-space: nowrap;
+}
+#btn-lock {
+  position: absolute; left: 4px; bottom: 15px; z-index: 10;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 28px; padding: 0 6px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
+}
+#btn-lock:hover { opacity: 1; }
+#btn-lock.active {
+  color: var(--gold); border-color: var(--gold); opacity: 1;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
+#btn-logscale {
+  position: absolute; z-index: 10;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 24px; padding: 0 6px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap;
+}
+#btn-logscale:hover { opacity: 1; }
+#btn-logscale.active {
+  color: var(--gold); border-color: var(--gold); opacity: 1;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
+
+/* reset browser defaults for both axis sliders */
+#y-slider-strip input[type="range"],
+#overlay-xl1   input[type="range"] {
+  -webkit-appearance: none; appearance: none; background: transparent;
+  touch-action: none;
+}
+
+/* ── horizontal (x-max): thickness = height ── */
+#overlay-xl1 input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--sl-track); background: var(--border);
+  border-radius: calc(var(--sl-track) / 2);
+}
+#overlay-xl1 input[type="range"]::-moz-range-track {
+  height: var(--sl-track); background: var(--border);
+  border-radius: calc(var(--sl-track) / 2);
+}
+#overlay-xl1 input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--sl-thumb); height: var(--sl-thumb); border-radius: 50%;
+  background: var(--text-dim);
+  margin-top: calc((var(--sl-track) - var(--sl-thumb)) / 2);
+}
+#overlay-xl1 input[type="range"]::-moz-range-thumb {
+  width: var(--sl-thumb); height: var(--sl-thumb);
+  border-radius: 50%; background: var(--text-dim); border: none;
+}
+
+/* ── vertical (y-max): writing-mode flips axes — thickness = width ── */
+#y-slider-strip input[type="range"]::-webkit-slider-runnable-track {
+  width: var(--sl-track); background: var(--border);
+  border-radius: calc(var(--sl-track) / 2);
+}
+#y-slider-strip input[type="range"]::-moz-range-track {
+  width: var(--sl-track); background: var(--border);
+  border-radius: calc(var(--sl-track) / 2);
+}
+#y-slider-strip input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--sl-thumb); height: var(--sl-thumb); border-radius: 50%;
+  background: var(--text-dim);
+  margin-left: calc((var(--sl-track) - var(--sl-thumb)) / 2);
+}
+#y-slider-strip input[type="range"]::-moz-range-thumb {
+  width: var(--sl-thumb); height: var(--sl-thumb);
+  border-radius: 50%; background: var(--text-dim); border: none;
+}
+
+/* Desktop sidebar: collapses to a narrow strip showing only the toggle button */
+.sidebar {
+  transition: width 0.22s ease;
+  overflow-x: hidden;
+}
+.sidebar.sidebar-hidden { width: 36px; }
+.sidebar-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 4px; flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-title {
+  font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+  color: var(--text-dim); letter-spacing: .06em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; padding-left: 7px;
+}
+.sidebar-content {
+  overflow-y: auto; overflow-x: hidden; flex: 1;
+}
+/* Collapsed strip: center the button, hide all content */
+.sidebar.sidebar-hidden .sidebar-header { justify-content: center; }
+.sidebar.sidebar-hidden .sidebar-title  { display: none; }
+.sidebar.sidebar-hidden .sidebar-content { display: none; }
+.sb-collapsed-strip {
+  display: none; flex: 1;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.sidebar.sidebar-hidden .sb-collapsed-strip { display: flex; }
+.sb-collapsed-text {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-dim); user-select: none; transition: color .15s;
+}
+.sidebar.sidebar-hidden:hover .sb-collapsed-text { color: var(--text-bright); }
+#btn-sidebar-toggle {
+  background: none; border: none; padding: 0 6px;
+  color: var(--text-dim); font-size: 14px; line-height: 1;
+  cursor: pointer; opacity: 0.45; flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+#btn-sidebar-toggle:hover { opacity: 1; }
+
+/* ── Field group (over 2D plot) ──────────────────────────────────── */
+.field-group {
+  display: flex; flex-direction: column; gap: 3px;
+  flex-shrink: 0;
+  /* width and margin-left set by JS each frame */
+}
+.field-top-row {
+  display: flex; align-items: center; gap: 4px;
+}
+#btn-play { flex-shrink: 0; }
+.load-area { position: absolute; z-index: 6; }
+/* ── Mobile landscape: full-screen canvas, collapsible sidebar ───── */
+
+@media (max-width: 900px) and (orientation: landscape) {
+  :root { --sidebar-w: 285px; }
+
+  /* Sidebar: fixed overlay starting below the header, offset by left safe area */
+  .sidebar {
+    position: fixed;
+    left: env(safe-area-inset-left, 0px);
+    top: 33px; height: calc(100vh - 33px); z-index: 100;
+    transform: translateX(calc(36px - var(--sidebar-w)));
+    transition: transform 0.22s ease;
+    box-shadow: none;
+    width: var(--sidebar-w) !important;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+  }
+
+  /* Canvas: reserve space for sidebar strip + left safe area; bottom + right safe areas */
+  .canvas-area {
+    padding-left: calc(36px + env(safe-area-inset-left, 0px));
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: max(18px, env(safe-area-inset-bottom, 18px));
+  }
+
+  /* Sidebar-header: match main header height so the bottom border aligns seamlessly */
+  .sidebar-header { padding: 3px 4px; min-height: 32px; }
+
+  /* Header: respect left/right safe areas */
+  .header-inner { padding: 3px max(14px, env(safe-area-inset-right, 14px)) 3px max(14px, env(safe-area-inset-left, 14px)); }
+  /* Title: show on mobile, smaller, no min-width constraint */
+  .header-title { min-width: 0; font-size: 14px; }
+  #btn-play { width: 26px; height: 26px; font-size: 13px; }
+  #btn-timeavg { font-size: 10px; }
+  #btn-fraunhofer { font-size: 10px; }
+  .tempo-val { font-size: 8.5px; }
+  /* Speed slider fills all available space; buttons sit at natural width */
+  .header-speed { flex: 1; }
+  .header-controls { gap: 6px; align-items: center; }
+  .header-right { flex: 0 0 auto; display: flex; gap: 4px; }
+
+  /* Lock button: match btn-timeavg size on mobile */
+  #btn-lock { height: 24px; padding: 0 7px; font-size: 11px; }
+
+  /* When closed: hide content so it doesn't bleed into the visible 36px strip */
+  .sidebar:not(.mobile-open) .sidebar-content { display: none; }
+  /* Collapsed strip: pinned to the visible rightmost 36px, below the header area */
+  .sidebar:not(.mobile-open) .sb-collapsed-strip {
+    display: flex;
+    position: absolute;
+    right: 0; top: 32px; bottom: 0;
+    width: 36px;
+    justify-content: center;
+    align-items: center;
+  }
+  .sidebar.mobile-open .sb-collapsed-strip { display: none; }
+
+}
+
+/* ── Portrait: rotate prompt ─────────────────────────────────────── */
+#rotate-prompt {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+  text-align: center; padding: 32px;
+}
+#rotate-prompt .rotate-icon {
+  font-size: 56px; line-height: 1;
+  animation: rotate-hint 2s ease-in-out infinite;
+}
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  40%       { transform: rotate(90deg); }
+  60%       { transform: rotate(90deg); }
+}
+#rotate-prompt p {
+  font-family: 'DM Mono', monospace; font-size: 14px;
+  color: var(--text-dim); max-width: 260px; line-height: 1.6;
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  #rotate-prompt { display: flex; }
+  .app, header { visibility: hidden; }
+}
+
+/* ── Mobile: stats already in sidebar (sb-stats-mobile shown only on small screens) */
+#sb-stats-mobile { display: none; }
+</style>
+</head>
+<body>
+<div id="rotate-prompt">
+  <div class="rotate-icon">📱</div>
+  <p>Bitte Gerät drehen, um die Simulation zu nutzen.</p>
+</div>
+
+<!-- ── Liénard-Wiechert Web Worker (not executed by browser) ─────────────── -->
+<script type="text/js-worker" id="lw-worker">
+'use strict';
+var C_W   = 299792458;
+var NX_W  = 55, NY_W = 45;   // compute grid (upsampled 2× to NX_F×NY_F)
+var NX_F  = 110, NY_F = 90;  // output grid
+var XL0_W = 0.0;
+var MIN_R_W = 0.05;  // exclusion radius in wavelengths
+
+function upsample(src, sw, sh, dw, dh) {
+  var dst = new Float32Array(dw * dh);
+  for (var di = 0; di < dw; di++) {
+    var si_ = di / (dw - 1) * (sw - 1);
+    var i0  = Math.min(si_ | 0, sw - 2), fi = si_ - i0;
+    for (var dj = 0; dj < dh; dj++) {
+      var sj_ = dj / (dh - 1) * (sh - 1);
+      var j0  = Math.min(sj_ | 0, sh - 2), fj = sj_ - j0;
+      dst[di * dh + dj] =
+        src[ i0      * sh + j0    ] * (1 - fi) * (1 - fj) +
+        src[(i0 + 1) * sh + j0    ] *      fi  * (1 - fj) +
+        src[ i0      * sh + j0 + 1] * (1 - fi) *      fj  +
+        src[(i0 + 1) * sh + j0 + 1] *      fi  *      fj;
+    }
+  }
+  return dst;
+}
+
+self.onmessage = function(ev) {
+  var p    = ev.data;
+  var f0   = p.f0, d_m = p.d_m, N = p.N, srcs = p.srcs, t = p.t;
+  var XL1  = p.xl1 || 12, YL0 = p.yl0 || -4, YL1 = p.yl1 || 4;
+  var lam  = C_W / f0;
+
+  var xA = new Float64Array(NX_W), yA = new Float64Array(NY_W);
+  for (var i = 0; i < NX_W; i++) xA[i] = (XL0_W + (XL1 - XL0_W) * i / (NX_W - 1)) * lam;
+  for (var j = 0; j < NY_W; j++) yA[j] = (YL0  + (YL1  - YL0)   * j / (NY_W - 1)) * lam;
+
+  var Ez_w = new Float32Array(NX_W * NY_W);
+  var Bx_w = new Float32Array(NX_W * NY_W);
+  var By_w = new Float32Array(NX_W * NY_W);
+
+  for (var n = 0; n < N; n++) {
+    var amp   = srcs[n].amp, fmul = srcs[n].fmul, phase = srcs[n].phase;
+    if (amp < 1e-6) continue;
+    var omega = fmul * 2 * Math.PI * f0;
+    var z_amp = amp * 1e-4 * lam;
+    var yn    = (n - (N - 1) / 2) * d_m;
+
+    for (var i = 0; i < NX_W; i++) {
+      var x = xA[i];
+      for (var j = 0; j < NY_W; j++) {
+        var y = yA[j];
+        var distToSrc = Math.sqrt(x * x + (y - yn) * (y - yn));
+        if (distToSrc < MIN_R_W * lam) continue;
+
+        // Initial guess: retarded time assuming source near origin
+        var tr = t - Math.sqrt(x * x + (y - yn) * (y - yn)) / C_W;
+
+        // Newton iteration: solve  t - tr - |r - r_s(tr)| / c = 0
+        for (var it = 0; it < 8; it++) {
+          var sz0  = z_amp * Math.sin(omega * tr + phase);
+          var vz0  = z_amp * omega * Math.cos(omega * tr + phase);
+          var Ry0  = y - yn, Rz0 = -sz0;
+          var R0   = Math.sqrt(x * x + Ry0 * Ry0 + Rz0 * Rz0) + 1e-30;
+          var fval = t - tr - R0 / C_W;
+          var fp   = -1 + (Rz0 * vz0) / (R0 * C_W);  // df/dtr = -1 + n̂·β
+          if (Math.abs(fp) < 1e-30) break;
+          tr -= fval / fp;
+        }
+
+        // Retarded quantities at converged tr
+        var sz  = z_amp * Math.sin(omega * tr + phase);
+        var vz  = z_amp * omega * Math.cos(omega * tr + phase);
+        var az  = -z_amp * omega * omega * Math.sin(omega * tr + phase);
+        var Rx  = x, Ry = y - yn, Rz = -sz;
+        var R2  = Rx * Rx + Ry * Ry + Rz * Rz + 1e-60;
+        var R   = Math.sqrt(R2), Ri = 1 / R;
+        var nx  = Rx * Ri, ny = Ry * Ri, nz = Rz * Ri;
+        var bz  = vz / C_W, b2 = bz * bz;
+        var kap = 1 - nz * bz;
+        if (Math.abs(kap) < 1e-10) continue;
+        var k3  = kap * kap * kap;
+
+        // (n̂ - β): source only has z-velocity
+        var dnx = nx, dny = ny, dnz = nz - bz;
+
+        // ── Velocity term  (n̂-β)(1-β²) / (κ³ R²) ─────────────────────────
+        var vc = (1 - b2) / (R2 * k3);
+        var Ex = vc * dnx, Ey = vc * dny, Ez = vc * dnz;
+
+        // ── Radiation term  n̂×[(n̂-β)×a] / (c κ³ R) ──────────────────────
+        // (n̂-β)×a  where a=(0,0,az):  wx=dny·az, wy=−dnx·az, wz=0
+        // n̂×w:  x= nz·(−(−dnx·az)) = nz·dnx·az
+        //        y= nz·dny·az
+        //        z= −(nx·dnx + ny·dny)·az
+        var ac = az / (C_W * R * k3);
+        Ex += ac * nz * dnx;
+        Ey += ac * nz * dny;
+        Ez += ac * (-(nx * dnx + ny * dny));
+
+        var idx  = i * NY_W + j;
+        Ez_w[idx] += Ez;
+        // B = (n̂ × E) / c  (per source; summed over sources)
+        Bx_w[idx] += (ny * Ez - nz * Ey) / C_W;
+        By_w[idx] += (nz * Ex - nx * Ez) / C_W;
+      }
+    }
+  }
+
+  // Bilinear upsample to output resolution
+  var EzF = upsample(Ez_w, NX_W, NY_W, NX_F, NY_F);
+  var BxF = upsample(Bx_w, NX_W, NY_W, NX_F, NY_F);
+  var ByF = upsample(By_w, NX_W, NY_W, NX_F, NY_F);
+
+  var out = new Float32Array(3 * NX_F * NY_F);
+  out.set(EzF, 0);
+  out.set(BxF, NX_F * NY_F);
+  out.set(ByF, 2 * NX_F * NY_F);
+  self.postMessage(out.buffer, [out.buffer]);
+};
+</script>
+
+<header>
+  <div class="header-inner">
+    <div class="header-title">EM-Wave Lab</div>
+    <div class="engine-switch">
+      <button id="btn-engine-lw"   class="engine-btn active" title="Liénard-Wiechert / Phasor">LW</button>
+      <button id="btn-engine-fdtd" class="engine-btn"        title="FDTD Zeitbereich">FDTD</button>
+    </div>
+    <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
+    <div class="header-controls">
+      <div class="header-speed">
+        <span class="tempo-val" id="val-tempo-top"></span>
+        <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
+      </div>
+      <div class="header-right">
+        <button id="btn-fraunhofer">Fernfeldgrenze</button>
+        <button id="btn-timeavg">Normierter Zeitmittelwert</button>
+      </div>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☾</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Einstellungen</span>
+      <button id="btn-sidebar-toggle" title="Einstellungen">‹</button>
+    </div>
+    <div class="sb-collapsed-strip" id="sb-collapsed-strip">
+      <span class="sb-collapsed-text">Einstellungen</span>
+    </div>
+    <div class="sidebar-content">
+
+    <div class="sb-group">
+      <div class="sb-label">Quellen Array</div>
+      <!-- Mode selector: LW only -->
+      <div id="sg-mode-lw" data-engines="lw">
+        <select class="src-select" id="sel-mode" style="margin-bottom:8px;width:100%">
+          <option value="punkt">Punkt Quellen</option>
+          <option value="dipol">Dipolantenne</option>
+        </select>
+      </div>
+      <!-- N + d: shared by both engines -->
+      <div id="sg-punkt">
+        <div class="slider-group" id="sg-N" style="color:var(--blue)">
+          <div class="slider-label src-formula">
+            <span class="src-name">Anzahl</span><span class="src-eq">N = <span class="pval" id="val-N">2</span></span>
+          </div>
+          <input type="range" id="sl-N" min="1" max="1000" value="2" step="1">
+        </div>
+        <div class="slider-group" id="sg-d" style="color:var(--blue)">
+          <div class="slider-label src-formula">
+            <span class="src-name">Quellen Abstand</span><span class="src-eq">d = <span id="val-d-phys">100</span><select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
+          </div>
+          <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
+        </div>
+      </div>
+      <!-- Dipole controls: LW only, visibility also managed by applyMode() -->
+      <div id="sg-dipole" style="display:none">
+        <div class="toggle-row" style="margin-bottom:6px">
+          <label><input type="checkbox" id="chk-infinite" checked> unendlich</label>
+        </div>
+        <div class="slider-group" id="sg-L" style="color:var(--blue)">
+          <div class="slider-label src-formula">
+            <span class="src-name">Dipol Länge</span><span class="src-eq">L/λ = <span class="pval" id="val-L">0.50</span></span>
+          </div>
+          <input type="range" id="sl-L" min="0.125" max="100" step="0.125" value="0.5">
+        </div>
+      </div>
+      <div class="slider-group" style="color:var(--gold)">
+        <div class="slider-label src-formula">
+          <span class="src-name">Frequenz</span><span class="src-eq">f₀ = <span id="val-f0-phys">6</span><select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
+        </div>
+        <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
+      </div>
+      <div class="bstat" style="margin-top:8px">
+        <span class="bstat-key">Wellenlänge (λ₀)</span>
+        <span class="bstat-val" id="st-lam">—</span>
+      </div>
+      <div class="bstat" id="st-dlam-row">
+        <span class="bstat-key">d / λ</span>
+        <span class="bstat-val" id="st-d-lam">—</span>
+      </div>
+      <div class="bstat" id="st-nd-row" style="display:none">
+        <span class="bstat-key">Array Länge N · d</span>
+        <span class="bstat-val" id="st-nd">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">Periodendauer (T)</span>
+        <span class="bstat-val" id="st-T">—</span>
+      </div>
+      <div class="bstat">
+        <span class="bstat-key">Fernfeldgrenze</span>
+        <span class="bstat-val" id="st-rff">—</span>
+      </div>
+    </div>
+
+    <div class="sb-group" id="sg-src-mod">
+      <div class="sb-label">Modifikation von Einzelquellen</div>
+      <select class="src-select" id="sel-src"></select>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label src-formula">
+          <span class="src-name">Amplitude</span><span class="src-eq">A = <span class="pval" id="val-src-a">1.0</span> · A₀</span>
+        </div>
+        <input type="range" id="sl-src-a" min="0" max="100" step="1" value="10">
+      </div>
+      <div class="slider-group" style="color:var(--text-dim)" data-engines="lw">
+        <div class="slider-label src-formula">
+          <span class="src-name">Frequenz</span><span class="src-eq">f = <span class="pval" id="val-src-f">1.0</span> · f₀</span>
+        </div>
+        <input type="range" id="sl-src-f" min="0" max="100" step="1" value="10">
+      </div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label src-formula">
+          <span class="src-name">Phase</span><span class="src-eq">φ = φ₀ <span class="pval" id="val-src-p">+ 0.0</span> · π</span>
+        </div>
+        <input type="range" id="sl-src-p" min="-24" max="24" step="1" value="0">
+      </div>
+      <select id="sel-presets" class="preset-btn preset-drop" style="margin-top:6px;width:100%">
+        <option value="" disabled selected>Presets…</option>
+        <option value="alt">Alt. Phase</option>
+        <option value="beam">Beam-Steering</option>
+        <option value="rnd">Zufällige Phase</option>
+        <option value="half">Hälfte aus</option>
+      </select>
+      <button class="preset-btn" id="btn-reset" style="margin-top:4px;width:100%">Zurücksetzen</button>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-label">Anzeige</div>
+      <div class="toggle-row">
+        <label><input type="checkbox" id="chk-efield" checked> E-Feld (Ez)</label>
+        <label><input type="checkbox" id="chk-bfield" checked> B-Feldlinien</label>
+      </div>
+    </div>
+
+
+    <!-- ── FDTD: obstacle drawing ───────────────────────────────── -->
+    <div class="sb-group" data-engines="fdtd" style="display:none">
+      <div class="sb-label">Hindernisse</div>
+      <div class="obstacle-btns">
+        <button id="btn-draw-fdtd" title="Rechteck zeichnen">✏ Zeichnen</button>
+        <button id="btn-clear-obs-fdtd" title="Alle Hindernisse löschen">🗑 Löschen</button>
+      </div>
+    </div>
+
+    <!-- ── FDTD: simulation speed ────────────────────────────────── -->
+    <div class="sb-group" data-engines="fdtd" style="display:none">
+      <div class="sb-label">Tempo (FDTD)</div>
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label src-formula">
+          <span class="src-name">Schritte/Frame</span>
+          <span class="src-eq"><span class="pval" id="val-fdtd-speed">4</span></span>
+        </div>
+        <input type="range" id="sl-fdtd-speed" min="1" max="20" value="4" step="1">
+      </div>
+    </div>
+
+    <!-- ── FDTD: obstacle presets ────────────────────────────────── -->
+    <div class="sb-group" data-engines="fdtd" style="display:none">
+      <div class="sb-label">Presets (FDTD)</div>
+      <div class="preset-stack">
+        <button class="preset-btn" id="btn-fdtd-einzelspalt">Einzelspalt (2λ)</button>
+        <button class="preset-btn" id="btn-fdtd-doppelspalt">Doppelspalt (1λ)</button>
+        <button class="preset-btn" id="btn-fdtd-reflektor">Reflektor</button>
+      </div>
+    </div>
+
+    <!-- ── FDTD: stats ───────────────────────────────────────────── -->
+    <div class="sb-group" data-engines="fdtd" style="display:none">
+      <div class="bstat"><span class="bstat-key">Gitter</span><span class="bstat-val" id="st-fdtd-grid">200×300</span></div>
+      <div class="bstat"><span class="bstat-key">Schritt</span><span class="bstat-val" id="st-fdtd-step">0</span></div>
+      <div class="bstat"><span class="bstat-key">fps</span><span class="bstat-val" id="st-fdtd-fps">—</span></div>
+    </div>
+
+    <div class="sb-group" id="sb-stats-mobile">
+      <div class="bstat"><span class="bstat-key">λ₀</span><span class="bstat-val" id="st-lam-m">—</span></div>
+      <div class="bstat"><span class="bstat-key">Fernfeldgrenze</span><span class="bstat-val" id="st-rff-m">—</span></div>
+      <div class="bstat"><span class="bstat-key">T</span><span class="bstat-val" id="st-T-m">—</span></div>
+      <div class="bstat"><span class="bstat-key">f₀</span><span class="bstat-val" id="st-f0-m">—</span></div>
+    </div>
+
+    </div><!-- /.sidebar-content -->
+  </aside>
+
+  <div class="canvas-area">
+    <div class="canvas-wrap">
+      <canvas id="field"></canvas>
+      <div class="load-area" id="load-area">
+        <div class="load-text" id="load-text">reloading…</div>
+        <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+      </div>
+      <button id="btn-lock" title="Skalierung koppeln">X≠Y</button>
+      <button id="btn-logscale" title="Logarithmische Skala">log</button>
+      <div id="y-slider-strip">
+        <span class="ax-val" id="val-yl">4 λ</span>
+        <input type="range" id="sl-yl" min="0.5" max="30" value="4" step="0.5">
+      </div>
+      <div id="overlay-xl1">
+        <input type="range" id="sl-xl1" min="1" max="100" value="12" step="1">
+        <span class="ax-val" id="val-xl1">12 λ</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<script>
+'use strict';
+
+const C_LIGHT = 299792458;
+
+// ── RdBu colormap ─────────────────────────────────────────────────────────────
+const CM = [
+  [5,48,97],[33,102,172],[67,147,195],[146,197,222],[247,247,247],
+  [244,165,130],[214,96,77],[178,24,43],[103,0,31]
+];
+function cmRGB(t) {
+  const u = Math.max(0, Math.min(1, (t + 1) / 2));
+  const p = u * (CM.length - 1);
+  const lo = Math.min(Math.floor(p), CM.length - 2);
+  const f  = p - lo;
+  const a  = CM[lo], b = CM[lo + 1];
+  return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
+}
+
+// ── Grid constants ────────────────────────────────────────────────────────────
+// ── EngineFDTD ────────────────────────────────────────────────────────────────
+class EngineFDTD {
+  constructor({ f0 = 1e9, N_SRC = 2, d_lam = 1.5, srcs = [] } = {}) {
+    // Grid constants
+    this.NX = 240; this.NY = 340;
+    this.N_PML = 20; this.N_LAM = 20; this.DT = 0.5;
+    this.AX0 = 20; this.AX1 = 220; this.AY0 = 20; this.AY1 = 320;
+    this.ANX = 200; this.ANY = 300;
+    this.XL_LAM  = 10;    // ANX / N_LAM
+    this.YL_HALF = 7.5;   // ANY / 2 / N_LAM
+    this.I_SRC   = 21;
+    this.J_CTR   = 169;
+    this.WALL_I  = 20 + 6 * 20;  // AX0 + 6λ
+    this.WALL_W  = 2;
+
+    // Field arrays
+    this.Ez      = new Float32Array(this.NX * this.NY);
+    this.Hx      = new Float32Array(this.NX * this.NY);
+    this.Hy      = new Float32Array(this.NX * this.NY);
+    this.sponge  = new Float32Array(this.NX * this.NY);
+    this.pecMask = new Uint8Array(this.NX * this.NY).fill(1);
+    this.screenAcc = new Float32Array(this.ANY);
+
+    // Simulation state
+    this.simStep = 0;
+    this.stepsPerFrame = 1;  // speed multiplier vs animSpeed (1 = match LW, 4 = 4× faster)
+    this._stepAccum    = 0;  // fractional step accumulator
+    this._rawObs = [];       // [{i0,j0,i1,j1}]
+    this.srcGridPos = [];
+
+    // FPS tracking
+    this._fpsCount = 0; this._fpsLast = 0; this._fps = 0;
+
+    // Source params
+    this.f0    = f0;
+    this.N_SRC = Math.min(N_SRC, 20);
+    this.d_lam = d_lam;
+    this._srcs = Array.from({ length: 100 }, (_, i) => ({
+      amp:   (i < srcs.length ? srcs[i].amp   : 1.0),
+      phase: (i < srcs.length ? srcs[i].phase : 0.0)
+    }));
+
+    this._initSponge();
+    this._updateSrcGridPos();
+    // Pre-run 300 steps to reach steady state
+    for (let i = 0; i < 300; i++) this._step();
+    this.screenAcc.fill(0);
+    this.simStep = 0;
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
+  _initSponge() {
+    const SIGMA_MAX = 1.5, M = 3;
+    for (let i = 0; i < this.NX; i++) {
+      for (let j = 0; j < this.NY; j++) {
+        let dx = 0, dy = 0;
+        if      (i < this.N_PML)              dx = (this.N_PML - i) / this.N_PML;
+        else if (i >= this.NX - this.N_PML)   dx = (i - (this.NX - this.N_PML - 1)) / this.N_PML;
+        if      (j < this.N_PML)              dy = (this.N_PML - j) / this.N_PML;
+        else if (j >= this.NY - this.N_PML)   dy = (j - (this.NY - this.N_PML - 1)) / this.N_PML;
+        const d = Math.max(dx, dy);
+        this.sponge[i * this.NY + j] = Math.exp(-SIGMA_MAX * Math.pow(d, M) * this.DT);
+      }
+    }
+  }
+
+  _updateSrcGridPos() {
+    this.srcGridPos = [];
+    for (let n = 0; n < this.N_SRC; n++) {
+      const yn    = (n - (this.N_SRC - 1) / 2) * this.d_lam;
+      const j_pos = Math.round(this.J_CTR + yn * this.N_LAM);
+      this.srcGridPos.push({ j_pos, amp: this._srcs[n].amp, phase: this._srcs[n].phase });
+    }
+  }
+
+  _recomputePEC() {
+    this.pecMask.fill(1);
+    for (const obs of this._rawObs) {
+      for (let i = Math.max(0, obs.i0); i <= Math.min(this.NX - 1, obs.i1); i++) {
+        for (let j = Math.max(0, obs.j0); j <= Math.min(this.NY - 1, obs.j1); j++) {
+          this.pecMask[i * this.NY + j] = 0;
+        }
+      }
+    }
+  }
+
+  _step() {
+    const { Ez, Hx, Hy, sponge, pecMask, NX, NY, DT, I_SRC, AY0, AY1 } = this;
+    // 1. H update
+    for (let i = 0; i < NX - 1; i++) {
+      const base = i * NY, base1 = base + NY;
+      for (let j = 0; j < NY - 1; j++) {
+        const k = base + j;
+        Hx[k] -= DT * (Ez[k + 1]       - Ez[k]);
+        Hy[k] += DT * (Ez[base1 + j]   - Ez[k]);
+      }
+    }
+    // 2. Ez update
+    for (let i = 1; i < NX; i++) {
+      const base = i * NY, basem = base - NY;
+      for (let j = 1; j < NY; j++) {
+        const k = base + j;
+        Ez[k] += DT * ((Hy[k] - Hy[basem + j]) - (Hx[k] - Hx[k - 1]));
+      }
+    }
+    // 3. Soft source injection
+    const omega = 2 * Math.PI / this.N_LAM;
+    const base_src = I_SRC * NY;
+    for (const { j_pos, amp, phase } of this.srcGridPos) {
+      if (j_pos >= AY0 && j_pos < AY1 && amp > 1e-6)
+        Ez[base_src + j_pos] += 0.08 * amp * Math.sin(omega * this.simStep + phase);
+    }
+    // 4. PEC + sponge
+    for (let k = 0; k < NX * NY; k++) {
+      if (!pecMask[k]) { Ez[k] = 0; Hx[k] = 0; Hy[k] = 0; }
+      else { const s = sponge[k]; Ez[k] *= s; Hx[k] *= s; Hy[k] *= s; }
+    }
+    this.simStep++;
+  }
+
+  _resetFields() {
+    this.Ez.fill(0); this.Hx.fill(0); this.Hy.fill(0);
+    this.screenAcc.fill(0);
+    this.simStep = 0;
+  }
+
+  // ── Public API ───────────────────────────────────────────────────────────────
+  // stepsFloat: fractional step count driven by animSpeed (see render loop)
+  tick(ts, stepsFloat) {
+    const SCREEN_DECAY = 0.015;
+    this._stepAccum += stepsFloat * this.stepsPerFrame;
+    while (this._stepAccum >= 1) { this._step(); this._stepAccum -= 1; }
+
+    // FPS
+    this._fpsCount++;
+    if (ts - this._fpsLast > 1000) {
+      this._fps = Math.round(this._fpsCount * 1000 / (ts - this._fpsLast));
+      this._fpsCount = 0; this._fpsLast = ts;
+    }
+
+    // Screen accumulator at current screenLam
+    const i_scr = Math.min(Math.max(
+      Math.round(this.AX0 + screenLam * this.N_LAM), this.AX0), this.AX1 - 1);
+    const base_scr = i_scr * this.NY;
+    for (let iy = 0; iy < this.ANY; iy++) {
+      const v = this.Ez[base_scr + this.AY0 + iy];
+      this.screenAcc[iy] = this.screenAcc[iy] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+    }
+  }
+
+  getField() {
+    // Returns Ez, Bx (Hx), By (Hy) for active region, layout [ix*ANY+iy], iy=0=bottom
+    const sz  = this.ANX * this.ANY;
+    const Ez  = new Float32Array(sz);
+    const Bx  = new Float32Array(sz);
+    const By  = new Float32Array(sz);
+    for (let ix = 0; ix < this.ANX; ix++) {
+      const i = this.AX0 + ix;
+      for (let iy = 0; iy < this.ANY; iy++) {
+        const k = ix * this.ANY + iy;
+        const g = i  * this.NY  + this.AY0 + iy;
+        Ez[k] = this.Ez[g];
+        Bx[k] = this.Hx[g];
+        By[k] = this.Hy[g];
+      }
+    }
+    return { Ez, Bx, By };
+  }
+
+  getScreenData(scrLam) {
+    const NY_SCR = 1024;
+    const inst = new Float64Array(NY_SCR);
+    const avg  = new Float64Array(NY_SCR);
+    const i_scr = Math.min(Math.max(
+      Math.round(this.AX0 + scrLam * this.N_LAM), this.AX0), this.AX1 - 1);
+    const base_scr = i_scr * this.NY;
+    for (let j = 0; j < NY_SCR; j++) {
+      const fiy = (this.ANY - 1) * j / (NY_SCR - 1);
+      const iy0 = Math.min(Math.floor(fiy), this.ANY - 2);
+      const a   = fiy - iy0;
+      const v0  = this.Ez[base_scr + this.AY0 + iy0];
+      const v1  = this.Ez[base_scr + this.AY0 + iy0 + 1];
+      inst[j] = (v0 * (1 - a) + v1 * a) ** 2;
+      avg[j]  = this.screenAcc[iy0] * (1 - a) + this.screenAcc[iy0 + 1] * a;
+    }
+    return { inst, avg };
+  }
+
+  setFrequency(f) {
+    this.f0 = f;
+    this._updateSrcGridPos();
+  }
+
+  setSources(N, d_lam, srcs) {
+    this.N_SRC = Math.min(N, 20);
+    this.d_lam = d_lam;
+    for (let i = 0; i < this.N_SRC && i < srcs.length; i++) {
+      this._srcs[i].amp   = srcs[i].amp;
+      this._srcs[i].phase = srcs[i].phase;
+    }
+    this._updateSrcGridPos();
+    this._resetFields();
+  }
+
+  setSourceParam(n, p) {
+    if (n >= 0 && n < this.N_SRC) {
+      if (p.amp   !== undefined) this._srcs[n].amp   = p.amp;
+      if (p.phase !== undefined) this._srcs[n].phase = p.phase;
+      this._updateSrcGridPos();
+      this._resetFields();  // immediate effect — FDTD transient otherwise too long
+    }
+  }
+
+  setStepsPerFrame(n) { this.stepsPerFrame = n; }
+
+  addObstacle({ x0λ, y0λ, x1λ, y1λ }) {
+    this._rawObs.push({
+      i0: Math.round(this.AX0 + Math.min(x0λ, x1λ) * this.N_LAM),
+      i1: Math.round(this.AX0 + Math.max(x0λ, x1λ) * this.N_LAM),
+      j0: Math.round(this.J_CTR + Math.min(y0λ, y1λ) * this.N_LAM),
+      j1: Math.round(this.J_CTR + Math.max(y0λ, y1λ) * this.N_LAM),
+    });
+    this._recomputePEC();
+  }
+
+  clearObstacles() {
+    this._rawObs = [];
+    this._recomputePEC();
+    this._resetFields();
+  }
+
+  getObstaclesInLambda() {
+    return this._rawObs.map(r => ({
+      x0λ: (r.i0 - this.AX0) / this.N_LAM,
+      x1λ: (r.i1 - this.AX0) / this.N_LAM,
+      y0λ: (r.j0 - this.J_CTR) / this.N_LAM,
+      y1λ: (r.j1 - this.J_CTR) / this.N_LAM,
+    }));
+  }
+
+  applyPreset(name) {
+    const { AX0, AY0, AY1, J_CTR, N_LAM, WALL_I, WALL_W } = this;
+    this._rawObs = [];
+    const N_SRC_new = (name === 'reflektor') ? 2 : 1;
+    if (name === 'einzelspalt') {
+      const half = N_LAM;  // 1λ each side → 2λ slit
+      this._rawObs = [
+        { i0: WALL_I, i1: WALL_I + WALL_W, j0: AY0,            j1: J_CTR - half - 1 },
+        { i0: WALL_I, i1: WALL_I + WALL_W, j0: J_CTR + half,   j1: AY1 - 1 },
+      ];
+    } else if (name === 'doppelspalt') {
+      const half = Math.round(0.5 * N_LAM);  // 0.5λ half-width → 1λ slit
+      const sep  = 2 * N_LAM;               // centres at ±2λ
+      const jlo  = J_CTR - sep, jhi = J_CTR + sep;
+      this._rawObs = [
+        { i0: WALL_I, i1: WALL_I + WALL_W, j0: AY0,              j1: jlo - half - 1 },
+        { i0: WALL_I, i1: WALL_I + WALL_W, j0: jlo + half,       j1: jhi - half - 1 },
+        { i0: WALL_I, i1: WALL_I + WALL_W, j0: jhi + half,       j1: AY1 - 1 },
+      ];
+    } else if (name === 'reflektor') {
+      const refl_i = AX0 + 7 * N_LAM;
+      this._rawObs = [
+        { i0: refl_i, i1: refl_i + WALL_W, j0: J_CTR, j1: AY1 - 1 },
+      ];
+    }
+    this._recomputePEC();
+    if (name !== 'einzelspalt' && name !== 'doppelspalt' && name !== 'reflektor') {
+      // 'alt' / 'beam' only change sources, handled externally — no obstacle change
+      this._rawObs = [];
+      this._recomputePEC();
+    }
+    this._resetFields();
+  }
+
+  resetFields() { this._resetFields(); }
+
+  getStats() {
+    const lam = 299792458 / this.f0;
+    const rFF = this.N_SRC <= 1 ? 0
+      : 2 * (this.N_SRC - 1) * (this.N_SRC - 1) * this.d_lam * this.d_lam;
+    return { lam, T: 1 / this.f0, rFF, step: this.simStep, fps: this._fps };
+  }
+
+  destroy() { /* no worker to terminate */ }
+}
+
+// ── LW / phasor engine globals ────────────────────────────────────────────────
+const NX = 110, NY = 90;
+const NY_SCR = 1024;   // screen intensity curve resolution (independent of field grid)
+const XL0 = 0.0;
+const MIN_R_LAM = 0.05;  // exclusion radius in wavelengths
+let   XL1 = 12;
+let   ylHalf = 4;
+let YL0 = -ylHalf, YL1 = ylHalf;
+let xPhysMax = null, yPhysHalf = null;  // physical extents in metres; null until init
+
+function niceTickStep(range, targetCount) {
+  if (range <= 0) return 1;
+  const rough = range / targetCount;
+  const exp   = Math.pow(10, Math.floor(Math.log10(rough)));
+  const frac  = rough / exp;
+  const mult  = frac < 1.5 ? 1 : frac < 3.5 ? 2 : frac < 7.5 ? 5 : 10;
+  return mult * exp;
+}
+const _SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+function toSup(n) {
+  return String(Math.abs(n)).replace(/\d/g, d => _SUP[+d]);
+}
+function toSci(v) {
+  if (v === 0) return '0';
+  const neg = v < 0, a = Math.abs(v);
+  const e = Math.floor(Math.log10(a));
+  const m = a / Math.pow(10, e);
+  const ms = (parseFloat(m.toFixed(1))) + '';
+  return (neg ? '−' : '') + ms + '×10' + (e < 0 ? '⁻' : '') + toSup(e);
+}
+function fmtTick(v) {
+  if (v === 0) return '0';
+  if (Math.abs(v) >= 1e3) return toSci(v);
+  return String(parseFloat(v.toPrecision(10)));
+}
+function fmtLam(v) {
+  if (v >= 1e4) return fmtTick(v) + ' λ';
+  const r = Math.round(v * 10) / 10;
+  return (r % 1 === 0 ? String(r) : r.toFixed(1)) + ' λ';
+}
+function updateTempoDisplay() {
+  const el = document.getElementById('val-tempo-top');
+  if (!el || !f0 || !animSpeed) return;
+  const factor = f0 / animSpeed;
+  const cSim   = C_LIGHT / factor;
+  const ef = Math.floor(Math.log10(Math.abs(factor)));
+  const mf = parseFloat((factor / Math.pow(10, ef)).toFixed(1));
+  const ec = Math.floor(Math.log10(Math.abs(cSim)));
+  const mc = parseFloat((cSim   / Math.pow(10, ec)).toFixed(2));
+  el.innerHTML = 'c<sub>sim</sub> = c / ' + mf + '×10<sup>' + ef + '</sup>'
+               + ' = ' + mc + '×10<sup>' + ec + '</sup> m/s';
+}
+
+function makeYTicks(half, includeZero) {
+  const step = niceTickStep(2 * half, 6);
+  const arr  = [];
+  const n0   = Math.floor(half / step + 1e-9);
+  for (let n = -n0; n <= n0; n++) {
+    const v = Math.round(n * step * 1e10) / 1e10;
+    if (Math.abs(v) > half + step * 0.01) continue;
+    if (!includeZero && n === 0) continue;
+    arr.push(v);
+  }
+  return arr;
+}
+
+let showEField  = true;
+let showBField  = true;
+let animSpeed   = 0.5;
+
+let rFF       = 0;
+let screenLam    = 10.0;
+let screenOverride = true;
+
+let isDipolMode   = false;
+let dipolInfinite = true;
+let L_lam         = 0.5;
+
+let N_SRC = 2;
+let f0    = 6e9;  // 6 GHz matches slider default
+let d_m   = 0.1;
+let d_lam = 1.5;
+const D_SCALES  = [{l:'pm',s:1e-12},{l:'nm',s:1e-9},{l:'µm',s:1e-6},{l:'mm',s:1e-3},{l:'m',s:1},{l:'km',s:1e3}];
+let d_unit_idx  = 3;  // mm
+const F0_SCALES = [{l:'µHz',s:1e-6},{l:'mHz',s:1e-3},{l:'Hz',s:1},{l:'kHz',s:1e3},{l:'MHz',s:1e6},{l:'GHz',s:1e9},{l:'THz',s:1e12}];
+let f0_unit_idx = 5;  // GHz
+
+const MAX_SRC = 1000;
+let srcs = Array.from({length: MAX_SRC}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+
+// Above this N, skip Liénard-Wiechert worker and use scalar phasor model instead
+const WS_LW_THRESHOLD = 30;
+
+let lam, k0, T_per;
+const xGrid = new Float64Array(NX);
+const yGrid = new Float64Array(NY);
+
+// Phasor precomputation: Z(x,y) = Σ_n (aₙ/rₙ) exp(i(φₙ−k·rₙ)) grouped by fmul
+// Per frame: E(x,y,t) = Re[exp(iωt)·Z] = Zre·cos(ωt) − Zim·sin(ωt)  →  O(NX×NY) per frame
+const _phasors = {};   // fmul_key → { re: Float32Array, im: Float32Array, omega: number }
+let _phasorsValid = false;
+
+const screenAcc   = new Float64Array(NY_SCR);  // time-averaged intensity (exact from phasors)
+const screenInst  = new Float64Array(NY_SCR);  // instantaneous intensity for blue curve
+const SCREEN_DECAY = 0.05;
+// Screen-column phasors at NY_SCR resolution (recomputed when screenLam or sources change)
+const _scr = {};   // fmul_key → { re, im, omega }
+let   _scrLam = -1;
+
+const acc2D = new Float32Array(NX * NY);
+const rEff  = new Float32Array(NX * NY);
+const ACC2D_DECAY = 0.05;
+let showTimeAvg = false;
+let logScale    = false;
+
+let simTime = 0;
+let lastTs  = null;
+let isLight  = true;
+let isPaused = false;
+
+
+const canvas  = document.getElementById('field');
+const ctx     = canvas.getContext('2d');
+const offsc   = document.createElement('canvas');
+const offCtx  = offsc.getContext('2d');
+offsc.width   = NX;
+offsc.height  = NY;
+let imgData = offCtx.createImageData(NX, NY);
+
+// cached layout from last draw() call — used by drag handler
+let _layoutFx0 = 54, _layoutFw = 600, _layoutFy0 = 28, _layoutFh = 400;
+let _lockEnforceFw = 0, _lockEnforceFh = 0;
+
+let _screenDragging = false;
+let _pinchStartDist = null, _pinchStartDx = 0, _pinchStartDy = 0;
+let _pinchStartXL1 = 0, _pinchStartYlHalf = 0;
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+  if (Math.abs(mx - xScr) < 10) {
+    _screenDragging = true;
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+  if (_screenDragging) {
+    const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
+    screenLam = Math.max(1, Math.min(XL1, newLam));
+    screenOverride = true;
+    const scrSl = document.getElementById('sl-scr');
+    if (scrSl) {
+      scrSl.value = screenLam.toFixed(1);
+      document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+    }
+  } else {
+    canvas.style.cursor = Math.abs(mx - xScr) < 10 ? 'ew-resize' : '';
+  }
+});
+
+canvas.addEventListener('mouseup', () => { _screenDragging = false; });
+canvas.addEventListener('mouseleave', () => { _screenDragging = false; });
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    const t = e.touches;
+    _pinchStartDx     = t[1].clientX - t[0].clientX;
+    _pinchStartDy     = t[1].clientY - t[0].clientY;
+    _pinchStartDist   = Math.hypot(_pinchStartDx, _pinchStartDy);
+    _pinchStartXL1    = XL1;
+    _pinchStartYlHalf = ylHalf;
+    _screenDragging   = false;
+    e.preventDefault();
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.touches[0].clientX - rect.left;
+  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+  if (Math.abs(mx - xScr) < 20) {
+    _screenDragging = true;
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && _pinchStartDist !== null) {
+    e.preventDefault();
+    const t = e.touches;
+    const dx = t[1].clientX - t[0].clientX;
+    const dy = t[1].clientY - t[0].clientY;
+    const slXl1 = document.getElementById('sl-xl1');
+    const slYl  = document.getElementById('sl-yl');
+    if (scaleLocked) {
+      const scale = _pinchStartDist / Math.hypot(dx, dy);
+      XL1    = Math.max(1, Math.min(Number(slXl1.max), _pinchStartXL1 * scale));
+      ylHalf = Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)));
+    } else {
+      // Independent axes: horizontal spread → X range, vertical spread → Y range
+      const scaleX = Math.abs(_pinchStartDx) > 5
+        ? Math.abs(_pinchStartDx) / Math.max(Math.abs(dx), 5) : 1;
+      const scaleY = Math.abs(_pinchStartDy) > 5
+        ? Math.abs(_pinchStartDy) / Math.max(Math.abs(dy), 5) : 1;
+      XL1    = Math.max(1, Math.min(Number(slXl1.max), _pinchStartXL1 * scaleX));
+      ylHalf = Math.max(1, Math.min(Number(slYl.max), _pinchStartYlHalf * scaleY));
+    }
+    xPhysMax  = XL1 * lam;
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slXl1.value = XL1.toFixed(3);
+    slYl.value  = ylHalf.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
+    recompute();
+    return;
+  }
+  if (!_screenDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.touches[0].clientX - rect.left;
+  const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
+  screenLam = Math.max(1, Math.min(XL1, newLam));
+  screenOverride = true;
+  const scrSl = document.getElementById('sl-scr');
+  if (scrSl) {
+    scrSl.value = screenLam.toFixed(1);
+    document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  }
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  if (e.touches.length < 2) _pinchStartDist = null;
+  if (e.touches.length === 0) _screenDragging = false;
+});
+
+// ── Engine management ─────────────────────────────────────────────────────────
+let activeEngineId = 'lw';
+let fdtdEngine     = null;
+// FDTD canvas draw-mode state (λ-unit coords)
+let fdtdDrawMode    = false;
+let fdtdDrawStart   = null;
+let fdtdDrawCurrent = null;
+
+function updatePanelVisibility() {
+  const isFDTD = activeEngineId === 'fdtd';
+
+  // Show/hide elements tagged with data-engines
+  document.querySelectorAll('[data-engines]').forEach(el => {
+    const ok = el.dataset.engines.split(' ').includes(activeEngineId);
+    el.style.display = ok ? '' : 'none';
+  });
+
+  // Dipole group: LW-only, but its visibility is also controlled by applyMode()
+  // Force hidden in FDTD; in LW restore based on current mode
+  const dipoleEl = document.getElementById('sg-dipole');
+  if (dipoleEl) dipoleEl.style.display = isFDTD ? 'none' : (isDipolMode ? '' : 'none');
+
+  // Header controls: always active (Fraunhofer/timeavg are no-ops in FDTD, speed slider is remapped)
+
+  // Axis sliders: fully functional in FDTD mode (viewport zoom works independently of engine domain)
+
+  // Engine buttons
+  document.getElementById('btn-engine-lw')  .classList.toggle('active', !isFDTD);
+  document.getElementById('btn-engine-fdtd').classList.toggle('active',  isFDTD);
+}
+
+function switchEngine(id) {
+  if (id === activeEngineId) return;
+
+  if (id === 'fdtd') {
+    // Create or update FDTD engine with current shared params
+    if (!fdtdEngine) {
+      fdtdEngine = new EngineFDTD({ f0, N_SRC, d_lam, srcs: srcs.slice(0, N_SRC) });
+    } else {
+      fdtdEngine.setFrequency(f0);
+      fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+    }
+    activeEngineId = 'fdtd';
+    isDipolMode = false;  // FDTD has no dipole mode
+    // Keep the user's current viewport (XL1, ylHalf) — the field is letterboxed within it
+    screenAcc.fill(0); screenInst.fill(0);
+    // Clear any stale LW loading indicator
+    _loadArea.classList.remove('reloading');
+    _loadBarEl.style.width = '0%';
+    document.getElementById('sl-fdtd-speed').value = fdtdEngine.stepsPerFrame;
+    document.getElementById('val-fdtd-speed').textContent = fdtdEngine.stepsPerFrame;
+  } else {
+    // Switch back to LW
+    activeEngineId = 'lw';
+    fdtdDrawMode = false;
+    // Restore physical extents
+    if (xPhysMax !== null && f0 > 0) {
+      const newLam = C_LIGHT / f0;
+      XL1    = Math.max(1, xPhysMax  / newLam);
+      ylHalf = Math.max(1, yPhysHalf / newLam);
+      YL0 = -ylHalf; YL1 = ylHalf;
+      document.getElementById('sl-xl1').value = XL1.toFixed(3);
+      document.getElementById('sl-yl').value  = ylHalf.toFixed(3);
+      document.getElementById('val-xl1').textContent = fmtLam(XL1);
+      document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
+    }
+    screenAcc.fill(0); screenInst.fill(0);
+    recompute();
+  }
+  updatePanelVisibility();
+}
+
+function recompute() {
+  lam   = C_LIGHT / f0;
+  k0    = 2 * Math.PI / lam;
+  T_per = 1 / f0;
+  d_lam = d_m * f0 / C_LIGHT;
+
+  rFF = (isDipolMode && dipolInfinite) ? NaN
+      : isDipolMode ? 2 * L_lam * L_lam
+      : (N_SRC <= 1) ? 0
+      : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
+
+  // FDTD path: update shared scalars only, skip phasor / LW work
+  if (activeEngineId === 'fdtd') { updateStats(); return; }
+
+  if (!screenOverride) {
+    screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
+  }
+  screenLam = Math.max(1, Math.min(XL1, screenLam));
+  const scrSl = document.getElementById('sl-scr');
+  if (scrSl) {
+    scrSl.max   = XL1;
+    scrSl.value = screenLam.toFixed(1);
+    document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  }
+
+  for (let i = 0; i < NX; i++)
+    xGrid[i] = (XL0 + (XL1 - XL0) * i / (NX - 1)) * lam;
+  for (let j = 0; j < NY; j++)
+    yGrid[j] = (YL0 + (YL1 - YL0) * j / (NY - 1)) * lam;
+  for (let i = 0; i < NX; i++)
+    for (let j = 0; j < NY; j++)
+      rEff[i*NY+j] = Math.sqrt(xGrid[i]*xGrid[i] + yGrid[j]*yGrid[j]) + 1e-10;
+  computePhasors();  // sets acc2D analytically — do NOT zero it after
+  // For large N skip the LW worker; null out stale results
+  if (N_SRC > WS_LW_THRESHOLD) { wsLatestEz = null; wsLatestBx = null; wsLatestBy = null; }
+  else wsSendParams();  // (re)start LW loop if it was stopped (e.g. N was > threshold)
+  screenAcc.fill(0);
+  updateStats();
+}
+
+function computePhasors() {
+  _phasorsValid = false;
+  _scrLam = -1;   // invalidate screen phasors too
+  for (const k in _phasors) delete _phasors[k];
+  const D = d_lam * lam;
+  const minR = MIN_R_LAM * lam;
+  for (let n = 0; n < N_SRC; n++) {
+    const {amp, fmul, phase} = srcs[n];
+    if (amp < 1e-6) continue;
+    const key = fmul.toFixed(4);
+    if (!_phasors[key]) {
+      _phasors[key] = {
+        re: new Float32Array(NX * NY),
+        im: new Float32Array(NX * NY),
+        omega: fmul * 2 * Math.PI * f0
+      };
+    }
+    const g = _phasors[key];
+    const kn = fmul * 2 * Math.PI * f0 / C_LIGHT;
+    const yn = (n - (N_SRC - 1) / 2) * D;
+    for (let i = 0; i < NX; i++) {
+      const dx = xGrid[i];
+      const iNY = i * NY;
+      for (let j = 0; j < NY; j++) {
+        const dy = yGrid[j] - yn;
+        const r = Math.sqrt(dx*dx + dy*dy);
+        if (r < minR) continue;
+        const phi = phase - kn * r;
+        const ri = amp / r;
+        g.re[iNY + j] += ri * Math.cos(phi);
+        g.im[iNY + j] += ri * Math.sin(phi);
+      }
+    }
+  }
+  // Exact time-average: <Ez²> = ½|Z|²  (cross-freq terms vanish over time)
+  acc2D.fill(0);
+  for (const key in _phasors) {
+    const g = _phasors[key];
+    for (let k = 0; k < NX * NY; k++)
+      acc2D[k] += 0.5 * (g.re[k] * g.re[k] + g.im[k] * g.im[k]);
+  }
+  _phasorsValid = true;
+}
+
+function computeScreenPhasors() {
+  _scrLam = screenLam;
+  for (const k in _scr) delete _scr[k];
+  if (isDipolMode) return;
+  const xscr = screenLam * lam;
+  const D = d_lam * lam;
+  const minR = MIN_R_LAM * lam;
+  for (let n = 0; n < N_SRC; n++) {
+    const {amp, fmul, phase} = srcs[n];
+    if (amp < 1e-6) continue;
+    const key = fmul.toFixed(4);
+    if (!_scr[key]) _scr[key] = {re: new Float64Array(NY_SCR), im: new Float64Array(NY_SCR), omega: fmul * 2 * Math.PI * f0};
+    const g = _scr[key];
+    const kn = fmul * 2 * Math.PI * f0 / C_LIGHT;
+    const yn = (n - (N_SRC - 1) / 2) * D;
+    for (let j = 0; j < NY_SCR; j++) {
+      const y_j = (YL0 + (YL1 - YL0) * j / (NY_SCR - 1)) * lam;
+      const dy = y_j - yn;
+      const r = Math.sqrt(xscr * xscr + dy * dy);
+      if (r < minR) continue;
+      const phi = phase - kn * r;
+      const ri = amp / r;
+      g.re[j] += ri * Math.cos(phi);
+      g.im[j] += ri * Math.sin(phi);
+    }
+  }
+  screenAcc.fill(0);
+  for (const key in _scr) {
+    const g = _scr[key];
+    for (let j = 0; j < NY_SCR; j++)
+      screenAcc[j] += 0.5 * (g.re[j] * g.re[j] + g.im[j] * g.im[j]);
+  }
+}
+
+function computeField(t) {
+  const Ez = new Float32Array(NX * NY);
+  for (const key in _phasors) {
+    const g = _phasors[key];
+    const ct = Math.cos(g.omega * t);
+    const st = Math.sin(g.omega * t);
+    for (let k = 0; k < NX * NY; k++)
+      Ez[k] += g.re[k] * ct - g.im[k] * st;
+  }
+  return Ez;
+}
+
+function computePlanarField(t) {
+  const Ez = new Float32Array(NX * NY);
+  const om = 2 * Math.PI * f0;
+  const k  = om / C_LIGHT;
+  for (let i = 0; i < NX; i++) {
+    const val = Math.cos(om * t - k * xGrid[i]);
+    for (let j = 0; j < NY; j++) Ez[i * NY + j] = val;
+  }
+  return Ez;
+}
+
+function computeDipoleField(t, Llam) {
+  const Ez = new Float32Array(NX * NY);
+  const om = 2 * Math.PI * f0;
+  const k  = om / C_LIGHT;
+  const L  = Llam * lam;
+  const M  = Math.max(20, Math.min(300, Math.ceil(Llam * 16)));
+  for (let m = 0; m < M; m++) {
+    const yp     = -L / 2 + m / (M - 1) * L;
+    const weight = Math.cos(Math.PI * yp / L);  // sinusoidal standing-wave current
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const r = Math.sqrt(xGrid[i] * xGrid[i] + (yGrid[j] - yp) * (yGrid[j] - yp));
+        if (r < MIN_R_LAM * lam) continue;
+        Ez[i * NY + j] += weight * Math.cos(om * t - k * r) / r;
+      }
+    }
+  }
+  return Ez;
+}
+
+function iScreen() {
+  const Lm = screenLam * lam;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < NX; i++) {
+    const d = Math.abs(xGrid[i] - Lm);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+
+function render(ts) {
+  requestAnimationFrame(render);
+
+  const dt = lastTs === null ? 0 : Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+
+  // ── FDTD branch ───────────────────────────────────────────────────────────
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    if (!isPaused) {
+      // Match LW visual speed: dt*animSpeed*T_per / (DT/(N_LAM*f0)) = dt*animSpeed*N_LAM/DT
+      const stepsFloat = dt * animSpeed * fdtdEngine.N_LAM / fdtdEngine.DT;
+      fdtdEngine.tick(ts, stepsFloat);
+      // Progress bar: same formula as LW (cycles when wave crosses full domain)
+      simTime += dt * animSpeed;
+      if (!_loadArea.classList.contains('reloading'))
+        _loadBarEl.style.width = ((simTime % XL1) / XL1 * 100).toFixed(2) + '%';
+    }
+
+    lam = C_LIGHT / f0; T_per = 1 / f0;
+    rFF = N_SRC <= 1 ? 0 : 2 * (N_SRC-1) * (N_SRC-1) * d_lam * d_lam;
+
+    // B-field available from Hx/Hy (set above with fdtdEngine.getField())
+
+    // Field → imgData
+    const { Ez: fdtdEz, Bx: fdtdBx, By: fdtdBy } = fdtdEngine.getField();
+    const fNX = fdtdEngine.ANX, fNY = fdtdEngine.ANY;
+    wsLatestBx = fdtdBx; wsLatestBy = fdtdBy; wsActive = true;
+    if (offsc.width !== fNX || offsc.height !== fNY) {
+      offsc.width = fNX; offsc.height = fNY;
+      imgData = offCtx.createImageData(fNX, fNY);
+    }
+    if (showEField) {
+      let s2 = 0;
+      for (let k = 0; k < fdtdEz.length; k++) s2 += fdtdEz[k] * fdtdEz[k];
+      const scale = 1 / (Math.sqrt(s2 / fdtdEz.length) * 4 + 1e-30);
+      const px = imgData.data;
+      for (let i = 0; i < fNX; i++) {
+        for (let j = 0; j < fNY; j++) {
+          const rgb = cmRGB(Math.tanh(fdtdEz[i * fNY + j] * scale));
+          const idx = ((fNY - 1 - j) * fNX + i) * 4;
+          px[idx]=rgb[0]; px[idx+1]=rgb[1]; px[idx+2]=rgb[2]; px[idx+3]=255;
+        }
+      }
+      offCtx.putImageData(imgData, 0, 0);
+    }
+
+    // Screen data
+    const sd = fdtdEngine.getScreenData(screenLam);
+    for (let j = 0; j < NY_SCR; j++) { screenInst[j] = sd.inst[j]; screenAcc[j] = sd.avg[j]; }
+
+    // Update FDTD stats
+    const stats = fdtdEngine.getStats();
+    const elStep = document.getElementById('st-fdtd-step');
+    if (elStep) elStep.textContent = stats.step.toLocaleString();
+    const elFps = document.getElementById('st-fdtd-fps');
+    if (elFps) elFps.textContent = stats.fps ? stats.fps + ' fps' : '—';
+
+    draw();
+    return;
+  }
+
+  // ── LW / phasor branch ────────────────────────────────────────────────────
+  if (!isPaused) {
+    simTime += dt * animSpeed;
+    if (XL1 > 0 && !_loadArea.classList.contains('reloading'))
+      _loadBarEl.style.width = ((simTime % XL1) / XL1 * 100).toFixed(2) + '%';
+  }
+
+  // Ensure offscreen canvas matches LW grid size
+  if (offsc.width !== NX || offsc.height !== NY) {
+    offsc.width = NX; offsc.height = NY;
+    imgData = offCtx.createImageData(NX, NY);
+  }
+
+  let Ez;
+  if (isDipolMode) {
+    Ez = dipolInfinite ? computePlanarField(simTime * T_per)
+                       : computeDipoleField(simTime * T_per, L_lam);
+    if (!wsLatestBx || wsLatestBx.length !== NX * NY) {
+      wsLatestBx = new Float32Array(NX * NY);
+      wsLatestBy = new Float32Array(NX * NY);
+    }
+    for (let _i = 0; _i < NX * NY; _i++) wsLatestBy[_i] = -Ez[_i] / C_LIGHT;
+    if (!isPaused)
+      for (let k = 0; k < NX * NY; k++)
+        acc2D[k] = acc2D[k] * (1 - ACC2D_DECAY) + Ez[k] * Ez[k] * ACC2D_DECAY;
+  } else {
+    const useLW = wsActive && wsLatestEz && N_SRC <= WS_LW_THRESHOLD;
+    Ez = useLW ? wsLatestEz : computeField(simTime * T_per);
+    if (!isPaused && useLW)
+      for (let k = 0; k < NX * NY; k++)
+        acc2D[k] = acc2D[k] * (1 - ACC2D_DECAY) + Ez[k] * Ez[k] * ACC2D_DECAY;
+  }
+
+  const px = imgData.data;
+  if (showTimeAvg) {
+    const rRef = lam || 1;
+    let s2 = 0;
+    for (let k = 0; k < NX * NY; k++) s2 += acc2D[k];
+    const scale = 1 / (Math.sqrt(s2 / (NX * NY)) * 4 + 1e-30);
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const k = i * NY + j;
+        const rComp = Math.sqrt(rEff[k] / rRef);
+        const val = Math.sign(Ez[k]) * Math.sqrt(acc2D[k]) * rComp;
+        const rgb = cmRGB(Math.tanh(val * scale));
+        const idx = ((NY - 1 - j) * NX + i) * 4;
+        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+      }
+    }
+  } else {
+    let s2 = 0;
+    for (let k = 0; k < Ez.length; k++) s2 += Ez[k] * Ez[k];
+    const scale = 1 / (Math.sqrt(s2 / Ez.length) * 4 + 1e-30);
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        const rgb = cmRGB(Math.tanh(Ez[i*NY+j] * scale));
+        const idx = ((NY - 1 - j) * NX + i) * 4;
+        px[idx] = rgb[0]; px[idx+1] = rgb[1]; px[idx+2] = rgb[2]; px[idx+3] = 255;
+      }
+    }
+  }
+  offCtx.putImageData(imgData, 0, 0);
+
+  if (!isDipolMode && _phasorsValid) {
+    if (_scrLam !== screenLam) computeScreenPhasors();
+    screenInst.fill(0);
+    const t_scr = simTime * T_per;
+    for (const key in _scr) {
+      const g = _scr[key];
+      const ct = Math.cos(g.omega * t_scr);
+      const st = Math.sin(g.omega * t_scr);
+      for (let j = 0; j < NY_SCR; j++) {
+        const v = g.re[j] * ct - g.im[j] * st;
+        screenInst[j] += v * v;
+      }
+    }
+  } else if (isDipolMode) {
+    const xscr = screenLam * lam;
+    const t_scr = simTime * T_per;
+    const om = 2 * Math.PI * f0, k_dip = om / C_LIGHT;
+    const Ldip = L_lam * lam;
+    const M_dip = Math.max(20, Math.min(300, Math.ceil(L_lam * 16)));
+    for (let j = 0; j < NY_SCR; j++) {
+      const y_j = (YL0 + (YL1 - YL0) * j / (NY_SCR - 1)) * lam;
+      let ez = 0;
+      if (dipolInfinite) {
+        ez = Math.cos(om * t_scr - k_dip * xscr);
+      } else {
+        for (let m = 0; m < M_dip; m++) {
+          const yp = -Ldip / 2 + m / (M_dip - 1) * Ldip;
+          const r = Math.sqrt(xscr * xscr + (y_j - yp) * (y_j - yp));
+          if (r < MIN_R_LAM * lam) continue;
+          ez += Math.cos(Math.PI * yp / Ldip) * Math.cos(om * t_scr - k_dip * r) / r;
+        }
+      }
+      screenInst[j] = ez * ez;
+      screenAcc[j] = screenAcc[j] * (1 - SCREEN_DECAY) + ez * ez * SCREEN_DECAY;
+    }
+  } else {
+    const is = iScreen();
+    for (let j = 0; j < NY_SCR; j++) {
+      const fj = j / (NY_SCR - 1) * (NY - 1);
+      const j0 = Math.min(Math.floor(fj), NY - 2);
+      const v = Ez[is * NY + j0] + (Ez[is * NY + j0 + 1] - Ez[is * NY + j0]) * (fj - j0);
+      screenInst[j] = v * v;
+      screenAcc[j]  = screenAcc[j] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+    }
+  }
+
+  draw();
+}
+
+// ── B-field streamlines ───────────────────────────────────────────────────────
+function drawStreamlines(ctx2d, Bx, By, fieldNX, fieldNY, fx0, fy0, fw, fh) {
+  const SEED_STEP = 35;
+  const STEP_PX   = 2.5;
+  const MAX_STEPS = 180;
+
+  function sampleB(cx, cy) {
+    let fi = (cx - fx0) / fw * (fieldNX - 1);
+    let fj = (1 - (cy - fy0) / fh) * (fieldNY - 1);
+    fi = Math.max(0, Math.min(fieldNX - 1 - 1e-6, fi));
+    fj = Math.max(0, Math.min(fieldNY - 1 - 1e-6, fj));
+    const i0 = fi | 0, i1 = i0 + 1;
+    const j0 = fj | 0, j1 = j0 + 1;
+    const df = fi - i0, dg = fj - j0;
+    function lerp2(arr) {
+      const v00 = arr[i0*fieldNY+j0], v10 = arr[i1*fieldNY+j0];
+      const v01 = arr[i0*fieldNY+j1], v11 = arr[i1*fieldNY+j1];
+      return (v00*(1-df) + v10*df)*(1-dg) + (v01*(1-df) + v11*df)*dg;
+    }
+    return [lerp2(Bx), lerp2(By)];
+  }
+
+  const fSize = fieldNX * fieldNY;
+  let sumB2 = 0;
+  const bmArr = new Float32Array(fSize);
+  for (let k = 0; k < fSize; k++) {
+    const bm2 = Bx[k]*Bx[k] + By[k]*By[k];
+    sumB2 += bm2;
+    bmArr[k] = Math.sqrt(bm2);
+  }
+  bmArr.sort();
+  const rmsB  = Math.sqrt(sumB2 / fSize);
+  const p95B  = bmArr[Math.floor(fSize * 0.95)] || 1e-30;
+  const threshold = rmsB * 0.15;
+
+  function trace(cx0, cy0, sign) {
+    const pts = [[cx0, cy0]];
+    let cx = cx0, cy = cy0;
+    for (let s = 0; s < MAX_STEPS; s++) {
+      const [bx, by] = sampleB(cx, cy);
+      const bm = Math.sqrt(bx*bx + by*by);
+      if (bm < threshold * 0.4) break;
+      const ux = (bx / bm) * sign;
+      const uy = -(by / bm) * sign;
+      cx += ux * STEP_PX;
+      cy += uy * STEP_PX;
+      if (cx < fx0 || cx > fx0+fw || cy < fy0 || cy > fy0+fh) break;
+      pts.push([cx, cy]);
+    }
+    return pts;
+  }
+
+  function drawArrow(ax, ay, dx, dy) {
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len < 1e-10) return;
+    const ux = dx / len, uy = dy / len;
+    const head = 5.5, wing = 2.8;
+    ctx2d.beginPath();
+    ctx2d.moveTo(ax + ux * head,        ay + uy * head);
+    ctx2d.lineTo(ax - uy * wing - ux * head * 0.4, ay + ux * wing - uy * head * 0.4);
+    ctx2d.lineTo(ax + uy * wing - ux * head * 0.4, ay - ux * wing - uy * head * 0.4);
+    ctx2d.closePath();
+    ctx2d.fill();
+  }
+
+  const CM_SL = [
+    [210, 140,  40],
+    [230, 185,  50],
+    [255, 230,  80],
+  ];
+  function cmSL(t) {
+    const p  = Math.max(0, Math.min(1, t)) * (CM_SL.length - 1);
+    const lo = Math.min(Math.floor(p), CM_SL.length - 2);
+    const f  = p - lo;
+    const a  = CM_SL[lo], b = CM_SL[lo + 1];
+    return [a[0]+(b[0]-a[0])*f | 0, a[1]+(b[1]-a[1])*f | 0, a[2]+(b[2]-a[2])*f | 0];
+  }
+  const scaleB = 2.0 / p95B;
+
+  ctx2d.save();
+  ctx2d.lineWidth = 1.1;
+  ctx2d.lineJoin  = 'round';
+  ctx2d.lineCap   = 'round';
+
+  for (let sy = fy0 + SEED_STEP / 2; sy < fy0 + fh; sy += SEED_STEP) {
+    for (let sx = fx0 + SEED_STEP / 2; sx < fx0 + fw; sx += SEED_STEP) {
+      const [bx0, by0] = sampleB(sx, sy);
+      const bm0 = Math.sqrt(bx0*bx0 + by0*by0);
+      if (bm0 < threshold) continue;
+
+      const t = Math.tanh(bm0 * scaleB);
+      const [r, g, b_] = cmSL(t);
+      const alpha = t * 0.85;
+      const lineColor = `rgba(${r},${g},${b_},${alpha.toFixed(2)})`;
+      ctx2d.strokeStyle = lineColor;
+      ctx2d.fillStyle   = lineColor;
+
+      const fwd = trace(sx, sy, +1);
+      const bwd = trace(sx, sy, -1);
+
+      const path = [...bwd.slice(1).reverse(), ...fwd];
+      if (path.length < 4) continue;
+
+      ctx2d.beginPath();
+      ctx2d.moveTo(path[0][0], path[0][1]);
+      for (let i = 1; i < path.length; i++)
+        ctx2d.lineTo(path[i][0], path[i][1]);
+      ctx2d.stroke();
+
+      const ai = Math.floor(fwd.length * 2 / 3);
+      if (ai >= 1 && ai < fwd.length) {
+        const [ax, ay] = fwd[ai];
+        const [px2, py2] = fwd[ai - 1];
+        drawArrow(ax, ay, ax - px2, ay - py2);
+      }
+    }
+  }
+  ctx2d.restore();
+}
+
+let scaleLocked = true;
+let _axisInit   = false;
+
+function computeXMax() {
+  const ff  = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
+  const raw = Math.max(20, 3 * ff);
+  return Math.ceil(raw / 5) * 5;   // round up to nearest 5 λ
+}
+function aspectYHalf(xl1) {
+  return _layoutFw > 0 ? xl1 * _layoutFh / (2 * _layoutFw) : xl1 / 2;
+}
+function aspectXL1(yh) {
+  return _layoutFh > 0 ? yh * 2 * _layoutFw / _layoutFh : yh * 2;
+}
+function rescaleAxesForArray(oldArrayLam) {
+  const newArrayLam = Math.max(1, N_SRC - 1) * d_lam;
+  if (oldArrayLam <= 0 || newArrayLam === oldArrayLam) return;
+  const ratio = newArrayLam / oldArrayLam;
+  const slYl = document.getElementById('sl-yl');
+  ylHalf = Math.max(Number(slYl.min) || 0.5, Math.min(Number(slYl.max) || 30, ylHalf * ratio));
+  yPhysHalf = ylHalf * lam;
+  YL0 = -ylHalf; YL1 = ylHalf;
+  slYl.value = ylHalf.toFixed(3);
+  document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+  if (scaleLocked) {
+    const slXl1 = document.getElementById('sl-xl1');
+    XL1 = Math.max(Number(slXl1.min) || 1, Math.min(Number(slXl1.max) || 100, XL1 * ratio));
+    xPhysMax = XL1 * lam;
+    slXl1.value = XL1.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+  }
+  recompute();
+}
+
+function updateAxisSliders() {
+  const slXl1 = document.getElementById('sl-xl1');
+  const slYl  = document.getElementById('sl-yl');
+
+  // Position x overlay
+  const xl = document.getElementById('overlay-xl1');
+  xl.style.left  = _layoutFx0 + 'px';
+  xl.style.width = _layoutFw  + 'px';
+  slXl1.style.width = _layoutFw + 'px';
+
+  if (_layoutFw <= 0 || _layoutFh <= 0) return;
+
+  const ff    = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
+  const xMax  = Math.ceil(Math.max(20, 10 * ff) / 5) * 5;
+  slXl1.min = 1; slXl1.max = xMax;
+  if (scaleLocked) {
+    const yFromMin = Math.round(aspectYHalf(Number(slXl1.min)) * 100) / 100;
+    const yFromMax = Math.round(aspectYHalf(xMax) * 100) / 100;
+    slYl.min = Math.max(0.25, yFromMin);
+    slYl.max = Math.max(Number(slYl.min) + 0.5, yFromMax);
+  } else {
+    slYl.min = 0.5; slYl.max = 30;
+  }
+
+  // Mirror overlay-xl1 pattern: set top/height from layout
+  const valYlEl = document.getElementById('val-yl');
+  const textH = Math.max(valYlEl.offsetHeight, 32);
+  const gap   = 6;
+  const strip = document.getElementById('y-slider-strip');
+  valYlEl.style.top = '0';
+  strip.style.top = _layoutFy0 + 'px';
+  strip.style.paddingTop = (textH + gap) + 'px';
+  const sliderH = Math.max(20, _layoutFh - textH - gap);
+  slYl.style.height = sliderH + 'px';
+
+  // On first valid layout, enforce equal scale if locked
+  if (!_axisInit && lam > 0) {
+    _axisInit = true;
+    if (scaleLocked) {
+      ylHalf = aspectYHalf(XL1);
+      YL0 = -ylHalf; YL1 = ylHalf;
+    }
+    yPhysHalf = ylHalf * lam;
+    xPhysMax  = XL1 * lam;
+    slYl.value = ylHalf.toFixed(3);
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    _lockEnforceFw = _layoutFw; _lockEnforceFh = _layoutFh;
+  }
+
+  // Re-enforce equal scale on window resize while locked
+  if (scaleLocked && _axisInit && (_layoutFw !== _lockEnforceFw || _layoutFh !== _lockEnforceFh)) {
+    _lockEnforceFw = _layoutFw; _lockEnforceFh = _layoutFh;
+    ylHalf = aspectYHalf(XL1);
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slYl.value = ylHalf.toFixed(3);
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+    recompute();
+  }
+}
+
+function draw() {
+  const dpr  = window.devicePixelRatio || 1;
+  const cssW = canvas.offsetWidth  || 800;
+  const cssH = canvas.offsetHeight || 500;
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw; canvas.height = ph;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W = cssW, H = cssH;
+  const isMob      = W < 900;
+  const XAXIS2_H   = isMob ? 52 : 52;
+  const FH = H - XAXIS2_H;
+  const SCREEN_W   = Math.max(isMob ? 160 : 100, Math.round(W * (isMob ? 0.27 : 0.20)));
+  const FIELD_W    = W - SCREEN_W - 1;
+  const xTickStep  = niceTickStep(XL1, 6);
+
+  const YAXIS_W     = isMob ? 50 : 64;
+  document.documentElement.style.setProperty('--yaxis-w', YAXIS_W + 'px');
+  const XAXIS_TOP_H = isMob ? 28 : 34;
+  const fw   = FIELD_W - YAXIS_W;
+  const fh   = FH - XAXIS_TOP_H;
+  const fx0  = YAXIS_W;
+  const fy0  = XAXIS_TOP_H;
+  _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
+  updateAxisSliders();
+  // c-slider fills all available space via CSS flex: 1; no JS cap needed.
+  { const hdrSpeed = document.querySelector('.header-speed');
+    if (hdrSpeed) hdrSpeed.style.maxWidth = '';
+  }
+
+  // Position progress bar overlay on the top edge of the 2D field
+  { const la = document.getElementById('load-area');
+    if (la) {
+      la.style.left  = fx0 + 'px';
+      la.style.width = fw  + 'px';
+      la.style.top   = (fy0 - 1) + 'px';
+    }
+  }
+
+  const BG     = isLight ? '#f5f6fa' : '#0a0b0e';
+  const PANEL  = isLight ? '#f0f2f8' : '#13151b';
+  const BORDER = isLight ? '#c8cbd8' : '#252830';
+  const AXIS   = isLight ? '#555e7a' : '#8898b8';
+  const GRID   = isLight ? '#d0d4e0' : '#222838';
+  const CYAN   = isLight ? '#1a7fb5' : '#6ed0ff';
+  const GOLD   = isLight ? '#a07020' : '#d4a85a';
+
+  const fTick  = `300 ${isMob ? 11 : 14}px 'DM Mono', monospace`;
+  const fTickB = `400 ${isMob ? 11 : 14}px 'DM Mono', monospace`;
+  const fLgnd  = `300 ${isMob ? 13 : 18}px 'DM Mono', monospace`;
+  const fSub   = `300 ${isMob ? 10 : 12}px 'DM Mono', monospace`;
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  const xPx = xl => fx0 + (xl - XL0) / (XL1 - XL0) * fw;
+  const yPx = yl => fy0 + (1 - (yl - YL0) / (YL1 - YL0)) * fh;
+
+  if (showEField) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    if (activeEngineId === 'fdtd' && fdtdEngine) {
+      // 9-arg drawImage: crop source to the visible viewport portion, draw to destination
+      const fYH  = fdtdEngine.YL_HALF;   // 7.5 λ (FDTD half-height)
+      const fXL  = fdtdEngine.XL_LAM;    // 10 λ  (FDTD x-extent)
+      const fNXd = fdtdEngine.ANX;        // 200 px
+      const fNYd = fdtdEngine.ANY;        // 300 px
+      const visYhalf = Math.min(ylHalf, fYH);
+      const visXmax  = Math.min(XL1, fXL);
+      // Source crop within offsc (row 0 = y=+fYH, row fNYd-1 = y=-fYH)
+      const sx = 0;
+      const sy = (fYH - visYhalf) / (2 * fYH) * fNYd;
+      const sw = (visXmax / fXL) * fNXd;
+      const sh = (2 * visYhalf)  / (2 * fYH) * fNYd;
+      // Destination on main canvas (CSS px)
+      const ddx = fx0;
+      const ddy = yPx(visYhalf);
+      const ddw = visXmax / (XL1 - XL0) * fw;
+      const ddh = yPx(-visYhalf) - ddy;
+      if (sw > 0 && sh > 0 && ddw > 0 && ddh > 0)
+        ctx.drawImage(offsc, sx, sy, sw, sh, ddx, ddy, ddw, ddh);
+    } else {
+      ctx.drawImage(offsc, fx0, fy0, fw, fh);
+    }
+  }
+
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  for (let n = 1; n * xTickStep < XL1; n++) {
+    const v = Math.round(n * xTickStep * 1e10) / 1e10;
+    const xp = xPx(v); if (xp < fx0 || xp > fx0 + fw) continue;
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+  }
+  makeYTicks(ylHalf, true).forEach(v => {
+    const yp = yPx(v);
+    ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 + fw, yp); ctx.stroke();
+  });
+
+  if (rFF > XL0 + 0.5 && rFF < XL1 * 0.99) {
+    const xRFF = xPx(rFF);
+    ctx.beginPath(); ctx.moveTo(xRFF, fy0); ctx.lineTo(xRFF, fy0 + fh);
+    ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 5;
+    ctx.setLineDash([8, 8]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = fTickB;
+    ctx.fillStyle = GOLD;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Fernfeldgrenze', xRFF + 6, fy0 + 4);
+  }
+
+  if (showBField && wsActive && wsLatestBx && wsLatestBy) {
+    const slNX = activeEngineId === 'fdtd' ? fdtdEngine.ANX : NX;
+    const slNY = activeEngineId === 'fdtd' ? fdtdEngine.ANY : NY;
+    drawStreamlines(ctx, wsLatestBx, wsLatestBy, slNX, slNY, fx0, fy0, fw, fh);
+  }
+
+  ctx.font = fTickB;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  if (!isDipolMode && !wsLatestBx && activeEngineId === 'lw') {
+    ctx.fillStyle = isLight ? '#1a7fb5cc' : '#6ed0ffcc';
+    ctx.fillText('Ez  (wird berechnet…)', fx0 + 8, fy0 + 6);
+  }
+
+  const xScr = xPx(screenLam);
+  ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh);
+  ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 7;
+  ctx.setLineDash([]); ctx.stroke();
+  ctx.font = fTickB;
+  ctx.fillStyle = GOLD;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('Schirm', xScr + 6, fy0 + 4 + (isMob ? 14 : 18));
+
+  if (isDipolMode) {
+    const x0 = xPx(0);
+    if (dipolInfinite) {
+      ctx.beginPath(); ctx.moveTo(x0, fy0); ctx.lineTo(x0, fy0 + fh);
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x0, yPx( L_lam / 2));
+      ctx.lineTo(x0, yPx(-L_lam / 2));
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 7; ctx.setLineDash([]); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x0, yPx( L_lam / 2), 3, 0, 2 * Math.PI);
+      ctx.fillStyle = GOLD; ctx.fill();
+      ctx.beginPath(); ctx.arc(x0, yPx(-L_lam / 2), 3, 0, 2 * Math.PI);
+      ctx.fillStyle = GOLD; ctx.fill();
+    }
+  } else {
+    for (let n = 0; n < N_SRC; n++) {
+      if (srcs[n].amp < 1e-6) continue;
+      const yn = (n - (N_SRC - 1) / 2) * d_lam;
+      const xp = xPx(0), yp = yPx(yn);
+      ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
+      ctx.fillStyle = BG; ctx.fill();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+    }
+  }
+
+  // ── FDTD obstacles ─────────────────────────────────────────────────────────
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    for (const obs of fdtdEngine.getObstaclesInLambda()) {
+      const ox0 = xPx(obs.x0λ), oy0 = yPx(obs.y1λ);
+      const ox1 = xPx(obs.x1λ), oy1 = yPx(obs.y0λ);
+      ctx.fillStyle   = isLight ? 'rgba(50,50,50,0.70)' : 'rgba(200,200,200,0.45)';
+      ctx.fillRect(ox0, oy0, ox1 - ox0, oy1 - oy0);
+      ctx.strokeStyle = isLight ? '#333' : '#bbb'; ctx.lineWidth = 1;
+      ctx.strokeRect(ox0, oy0, ox1 - ox0, oy1 - oy0);
+    }
+    // Preview rect while drawing
+    if (fdtdDrawStart && fdtdDrawCurrent) {
+      const x0 = Math.min(fdtdDrawStart.xl, fdtdDrawCurrent.xl);
+      const x1 = Math.max(fdtdDrawStart.xl, fdtdDrawCurrent.xl);
+      const y0 = Math.min(fdtdDrawStart.yl, fdtdDrawCurrent.yl);
+      const y1 = Math.max(fdtdDrawStart.yl, fdtdDrawCurrent.yl);
+      ctx.strokeStyle = isLight ? 'rgba(80,80,80,0.9)' : 'rgba(230,230,230,0.9)';
+      ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+      ctx.strokeRect(xPx(x0), yPx(y1), xPx(x1) - xPx(x0), yPx(y0) - yPx(y1));
+      ctx.setLineDash([]);
+    }
+  }
+
+  ctx.font = fTick;
+  ctx.fillStyle = AXIS; ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.beginPath(); ctx.moveTo(fx0, fy0 + fh); ctx.lineTo(fx0, fy0 + fh + 5); ctx.stroke();
+  ctx.fillText('0', fx0, fy0 + fh + 6);
+  for (let n = 1; n * xTickStep < XL1; n++) {
+    const v = Math.round(n * xTickStep * 1e10) / 1e10;
+    const xp = xPx(v);
+    if (xp < fx0 + 4 || xp > fx0 + fw - 4) continue;
+    ctx.beginPath(); ctx.moveTo(xp, fy0 + fh); ctx.lineTo(xp, fy0 + fh + 5); ctx.stroke();
+    ctx.fillText(fmtTick(v), xp, fy0 + fh + 6);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillText('x / λ', fx0 + fw, fy0 + fh + 6);
+
+  makeYTicks(ylHalf, false).forEach(v => {
+    const yp = yPx(v);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(fx0, yp); ctx.lineTo(fx0 - 5, yp); ctx.stroke();
+    ctx.save();
+    ctx.translate(fx0 - 7, yp);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(fmtTick(v), 0, 0);
+    ctx.restore();
+  });
+  ctx.save();
+  ctx.translate(fx0 - 8, fy0 + 4);
+  ctx.rotate(-Math.PI / 2);
+  ctx.font = fTickB;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('y / λ', 0, 0);
+  ctx.restore();
+
+  ctx.beginPath(); ctx.moveTo(FIELD_W, fy0); ctx.lineTo(FIELD_W, FH);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
+
+  const SX       = FIELD_W + 1;
+  const AXIS_W   = Math.min(isMob ? 36 : 46, Math.floor(SCREEN_W * 0.28));
+  const RIGHT_W  = SCREEN_W >= 150 ? (isMob ? 34 : 44) : 0;
+  const CURVE_X0 = SX + AXIS_W + 1;
+  const iPW      = SCREEN_W - AXIS_W - RIGHT_W - 2;
+  const RIGHT_X0 = CURVE_X0 + iPW + 1;
+
+  // Position log-scale button under the intensity plot
+  { const btnLog = document.getElementById('btn-logscale');
+    if (btnLog) {
+      btnLog.style.left  = (SX + AXIS_W) + 'px';
+      btnLog.style.width = (RIGHT_X0 - SX - AXIS_W - 1) + 'px';
+      btnLog.style.top   = Math.round(FH + (XAXIS2_H - 24) / 2) + 'px';
+    }
+  }
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(SX, 0, SCREEN_W, H);
+
+  ctx.beginPath();
+  ctx.moveTo(SX + AXIS_W, fy0); ctx.lineTo(SX + AXIS_W, fy0 + fh);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
+
+  const scrYpx = v => fy0 + (1 - (v - YL0) / (YL1 - YL0)) * fh;
+  ctx.font = fTick;
+  ctx.fillStyle = AXIS;
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  makeYTicks(ylHalf, true).forEach(v => {
+    const yp = scrYpx(v);
+    if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(SX + AXIS_W - 4, yp);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.save();
+    ctx.translate(SX + AXIS_W - 6, yp);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(fmtTick(v), 0, 0);
+    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(SX + AXIS_W, yp); ctx.lineTo(RIGHT_X0, yp);
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.4; ctx.stroke();
+  });
+  ctx.save();
+  ctx.translate(SX + AXIS_W - 7, fy0 + 4);
+  ctx.rotate(-Math.PI / 2);
+  ctx.font = fTick;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('y / λ', 0, 0);
+  ctx.restore();
+  // ── Compute log-scale range (from screenAcc, shared by grid + both curves) ──
+  let _logDecades = 4;
+  if (logScale) {
+    let Imax = 1e-30, Imin2 = 1;
+    for (let j = 0; j < NY_SCR; j++) if (screenAcc[j] > Imax) Imax = screenAcc[j];
+    Imin2 = Imax;
+    for (let j = 0; j < NY_SCR; j++) { const v = screenAcc[j]; if (v > Imax * 1e-8 && v < Imin2) Imin2 = v; }
+    _logDecades = Math.min(6, Math.max(1, Math.ceil(-Math.log10(Math.max(Imin2 / Imax, 1e-8)))));
+  }
+
+  // ── Intensity-plot grid ──
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  if (!logScale) {
+    [0.25, 0.5, 0.75, 1.0].forEach(f => {
+      const xp = CURVE_X0 + f * iPW;
+      ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+    });
+  } else {
+    // Major lines at each power-of-10, minor lines at 2–9 × decade
+    for (let k = 0; k <= _logDecades; k++) {
+      const xp = CURVE_X0 + (1 - k / _logDecades) * iPW;
+      ctx.strokeStyle = k === 0 ? AXIS + '80' : GRID;
+      ctx.lineWidth = k === 0 ? 0.6 : 0.4;
+      ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+    }
+    // Minor ticks: 2–9 within each decade span
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.25;
+    for (let k = 0; k < _logDecades; k++) {
+      for (let m = 2; m <= 9; m++) {
+        const f = (k + 1 - Math.log10(m)) / _logDecades;
+        if (f <= 0 || f >= 1) continue;
+        const xp = CURVE_X0 + f * iPW;
+        ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+      }
+    }
+  }
+
+  // ── Analytical intensity pattern for dipole mode (point sources use screenAcc) ──
+  let I_buf_ana = null, I_peak_ana = 0;
+  if (isDipolMode && !dipolInfinite) {
+    I_buf_ana = new Float32Array(NY_SCR);
+    for (let j = 0; j < NY_SCR; j++) {
+      const yLam  = YL0 + (YL1 - YL0) * j / (NY_SCR - 1);
+      const r0    = Math.sqrt(screenLam * screenLam + yLam * yLam);
+      const sinT  = yLam / r0;
+      const u     = L_lam * sinT;
+      const denom = 1 - (2 * u) * (2 * u);
+      const F     = Math.abs(denom) < 1e-6
+        ? L_lam / 2
+        : (2 * L_lam / Math.PI) * Math.cos(Math.PI * u) / denom;
+      I_buf_ana[j] = (F * F) / (r0 * r0);
+      if (I_buf_ana[j] > I_peak_ana) I_peak_ana = I_buf_ana[j];
+    }
+  }
+
+  // Helper: map intensity value to [0,1] plot fraction (linear or log)
+  function iScale(arr) {
+    let Imax = 1e-30;
+    for (let j = 0; j < NY_SCR; j++) if (arr[j] > Imax) Imax = arr[j];
+    if (!logScale) return v => Math.min(v / Imax, 1);
+    const floor = Imax * Math.pow(10, -_logDecades);
+    return v => Math.max(0, 1 + Math.log10(Math.max(v, floor) / Imax) / _logDecades);
+  }
+
+  // Blue: instantaneous Ez²
+  const scaleI = iScale(screenInst);
+  ctx.beginPath();
+  for (let j = 0; j < NY_SCR; j++) {
+    const xp = CURVE_X0 + scaleI(screenInst[j]) * iPW;
+    const yp = fy0 + (1 - j / (NY_SCR - 1)) * fh;
+    j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+  }
+  ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
+
+  // Gold: time-averaged intensity Ī(y)
+  ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
+  if (isDipolMode && dipolInfinite) {
+    ctx.beginPath();
+    ctx.moveTo(CURVE_X0 + iPW, fy0);
+    ctx.lineTo(CURVE_X0 + iPW, fy0 + fh);
+    ctx.stroke();
+  } else if (isDipolMode && I_buf_ana && I_peak_ana > 0) {
+    const scaleA = logScale ? iScale(I_buf_ana) : (v => v / I_peak_ana);
+    ctx.beginPath();
+    for (let j = 0; j < NY_SCR; j++) {
+      const xp = CURVE_X0 + scaleA(I_buf_ana[j]) * iPW;
+      const yp = fy0 + (1 - j / (NY_SCR - 1)) * fh;
+      j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+    }
+    ctx.stroke();
+  } else if (!isDipolMode) {
+    const scaleA = iScale(screenAcc);
+    ctx.beginPath();
+    for (let j = 0; j < NY_SCR; j++) {
+      const xp = CURVE_X0 + scaleA(screenAcc[j]) * iPW;
+      const yp = fy0 + (1 - j / (NY_SCR - 1)) * fh;
+      j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+
+  // ── Physical y-axis (right side of intensity panel) ─────────────────────────
+  const Y2_UNITS = [
+    {label:'km',scale:1e3},{label:'m',scale:1},{label:'mm',scale:1e-3},
+    {label:'µm',scale:1e-6},{label:'nm',scale:1e-9},{label:'pm',scale:1e-12}
+  ];
+  const y2MaxPhys = ylHalf * lam;
+  const y2u = Y2_UNITS.find(u => y2MaxPhys / u.scale >= 0.5) || Y2_UNITS[Y2_UNITS.length - 1];
+  const y2Ticks = makeYTicks(ylHalf, true);
+  const y2StepPhys = (y2Ticks.length > 1
+    ? Math.abs(y2Ticks[1] - y2Ticks[0]) : ylHalf) * lam / y2u.scale;
+  const y2Dec = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(y2StepPhys) + 1e-30))), 4);
+
+  if (RIGHT_W > 0) {
+    ctx.beginPath(); ctx.moveTo(RIGHT_X0, fy0); ctx.lineTo(RIGHT_X0, fy0 + fh);
+    ctx.strokeStyle = BORDER; ctx.lineWidth = 0.8; ctx.stroke();
+
+    ctx.font = fTick;
+    ctx.fillStyle = AXIS;
+    y2Ticks.forEach(v => {
+      const yp = scrYpx(v);
+      if (yp < fy0 + 8 || yp > fy0 + fh - 8) return;
+      ctx.beginPath(); ctx.moveTo(RIGHT_X0, yp); ctx.lineTo(RIGHT_X0 + 4, yp);
+      ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+      ctx.save();
+      ctx.translate(RIGHT_X0 + 7, yp);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText((v * lam / y2u.scale).toFixed(y2Dec), 0, 0);
+      ctx.restore();
+    });
+    ctx.font = fTick;
+    ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(y2u.label, RIGHT_X0 + RIGHT_W / 2, fy0);
+  }
+
+  // ── Intensity panel legend (right-aligned, right 2/3 of plot) ──────────────
+  ctx.font = fLgnd;
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+  const RX  = RIGHT_X0 - 6;
+  const swL = isMob ? 14 : 20, gap = isMob ? 4 : 6, lh = isMob ? 16 : 21;
+  const LY1 = fy0 + 10, LY2 = fy0 + 10 + lh + 4;
+  // Blue: I(t)
+  ctx.fillStyle = CYAN;
+  ctx.fillText('I(t)', RX, LY1);
+  const tw1 = ctx.measureText('I(t)').width;
+  ctx.beginPath(); ctx.moveTo(RX - tw1 - gap - swL, LY1); ctx.lineTo(RX - tw1 - gap, LY1);
+  ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
+  // Gold: Ī(y) + (Fernfeld) on next line
+  ctx.fillStyle = GOLD + 'bb';
+  ctx.fillText('Ī(y)', RX, LY2);
+  const tw2 = ctx.measureText('Ī(y)').width;
+  ctx.beginPath(); ctx.moveTo(RX - tw2 - gap - swL, LY2); ctx.lineTo(RX - tw2 - gap, LY2);
+  ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = fSub;
+  ctx.textAlign = 'left';
+  ctx.fillText('(Fernfeld)', RX - tw2 - gap - swL, LY2 + lh);
+
+  ctx.beginPath(); ctx.moveTo(fx0, FH); ctx.lineTo(FIELD_W, FH);
+  ctx.strokeStyle = BORDER; ctx.lineWidth = 0.6; ctx.stroke();
+
+  const X2_UNITS = [
+    {label:'km', scale:1e3},{label:'m',  scale:1},  {label:'mm', scale:1e-3},
+    {label:'µm', scale:1e-6},{label:'nm', scale:1e-9},{label:'pm', scale:1e-12}
+  ];
+  const x2MaxPhys = XL1 * lam;
+  const x2u = X2_UNITS.find(u => x2MaxPhys / u.scale >= 0.5) || X2_UNITS[X2_UNITS.length - 1];
+  const x2Min = XL0 * lam / x2u.scale;
+  const x2Max = XL1 * lam / x2u.scale;
+  const x2Rough = (x2Max - x2Min) / 5;
+  const x2Exp   = Math.pow(10, Math.floor(Math.log10(x2Rough)));
+  const x2Frac  = x2Rough / x2Exp;
+  const x2NFrac = x2Frac < 1.5 ? 1 : x2Frac < 3.5 ? 2 : x2Frac < 7.5 ? 5 : 10;
+  const x2Step  = x2NFrac * x2Exp;
+  const x2First = Math.ceil(x2Min  / x2Step + 1e-9) * x2Step;
+  const x2Last  = Math.floor(x2Max / x2Step - 1e-9) * x2Step;
+  const x2Dec   = Math.min(Math.max(0, -Math.floor(Math.log10(Math.abs(x2Step)))), 4);
+
+  ctx.font = fTick;
+  ctx.fillStyle = AXIS; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  for (let v = x2First; v <= x2Last + x2Step * 0.01; v += x2Step) {
+    v = Math.round(v / (x2Step * 1e-6)) * x2Step * 1e-6;
+    const xLam = (v * x2u.scale) / lam;
+    const xp   = xPx(xLam);
+    if (xp < fx0 + 6 || xp > fx0 + fw - 6) continue;
+    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 - 4);
+    ctx.strokeStyle = AXIS; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.fillText(v.toFixed(x2Dec), xp, fy0 - 5);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillText(x2u.label, fx0 + fw - 4, fy0 - 5);
+}
+
+function updateStats() {
+  if (!lam) return;
+  const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
+  const TIME_U = [{l:'s',s:1},{l:'ms',s:1e-3},{l:'µs',s:1e-6},{l:'ns',s:1e-9},{l:'ps',s:1e-12},{l:'fs',s:1e-15}];
+  const pick = (arr, val) => arr.find(u => val / u.s >= 0.5) || arr[arr.length - 1];
+
+  const pu = l => l.length < 2 ? l + ' ' : l;  // pad unit to 2 chars
+
+  const uLam = pick(DIST_U, lam);
+  document.getElementById('st-lam').textContent = (lam / uLam.s).toFixed(2) + ' ' + pu(uLam.l);
+
+  const uT = pick(TIME_U, T_per);
+  document.getElementById('st-T').textContent = (T_per / uT.s).toFixed(2) + ' ' + pu(uT.l);
+
+  let rFFtext = '—';
+  if (!isNaN(rFF) && rFF > 0) {
+    const rFFm = rFF * lam;
+    const uR = pick(DIST_U, rFFm);
+    rFFtext = (rFFm / uR.s).toFixed(2) + ' ' + pu(uR.l);
+  }
+  document.getElementById('st-rff').textContent = rFFtext;
+  const btnFr = document.getElementById('btn-fraunhofer');
+  if (btnFr) {
+    btnFr.disabled = !(Number.isFinite(rFF) && rFF > 0);
+    btnFr.textContent = rFF > 0 ? 'Fernfeldgrenze (' + rFFtext + ')' : 'Fernfeldgrenze';
+  }
+  // mirror to mobile sidebar
+  const _m = s => { const el = document.getElementById(s + '-m'); if (el) el.textContent = document.getElementById(s).textContent; };
+  _m('st-lam'); _m('st-T'); _m('st-rff');
+}
+
+const selSrc = document.getElementById('sel-src');
+const slSrcA = document.getElementById('sl-src-a');
+const slSrcF = document.getElementById('sl-src-f');
+const slSrcP = document.getElementById('sl-src-p');
+const vlSrcA = document.getElementById('val-src-a');
+const vlSrcF = document.getElementById('val-src-f');
+const vlSrcP = document.getElementById('val-src-p');
+let selectedSrc = 0;
+
+function buildRows() {
+  selSrc.innerHTML = '';
+  for (let n = 0; n < N_SRC; n++) {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = 'Quelle ' + (n + 1);
+    selSrc.appendChild(opt);
+  }
+  selectedSrc = Math.min(selectedSrc, N_SRC - 1);
+  selSrc.value = selectedSrc;
+  syncRows();
+}
+
+function syncRows() {
+  const s = srcs[selectedSrc];
+  slSrcA.value = Math.round(s.amp  * 10);
+  slSrcF.value = Math.round(s.fmul * 10);
+  slSrcP.value = Math.round(s.phase / Math.PI * 12);
+  document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
+  document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
+  { const n = +(slSrcP.value / 12).toFixed(2); document.getElementById('val-src-p').value = (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); }
+  screenAcc.fill(0);
+}
+
+selSrc.addEventListener('change', () => { selectedSrc = Number(selSrc.value); syncRows(); });
+slSrcA.addEventListener('input', () => {
+  srcs[selectedSrc].amp  = slSrcA.value / 10;
+  document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
+  screenAcc.fill(0); acc2D.fill(0);
+  if (activeEngineId === 'fdtd' && fdtdEngine) fdtdEngine.setSourceParam(selectedSrc, { amp: srcs[selectedSrc].amp });
+});
+slSrcF.addEventListener('input', () => {
+  srcs[selectedSrc].fmul = slSrcF.value / 10;
+  document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
+  screenAcc.fill(0); acc2D.fill(0);
+});
+slSrcP.addEventListener('input', () => {
+  srcs[selectedSrc].phase = slSrcP.value * Math.PI / 12;
+  { const n = +(slSrcP.value / 12).toFixed(2); document.getElementById('val-src-p').value = (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); }
+  screenAcc.fill(0); acc2D.fill(0);
+  if (activeEngineId === 'fdtd' && fdtdEngine) fdtdEngine.setSourceParam(selectedSrc, { phase: srcs[selectedSrc].phase });
+});
+
+function readGlobals() {
+  const newN = Number(document.getElementById('sl-N').value);
+  if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
+
+  recompute();
+
+  document.getElementById('val-N').value = newN;
+  updateDDisplay();
+}
+document.getElementById('sl-N').addEventListener('input', () => {
+  const oldArr = Math.max(1, N_SRC - 1) * d_lam;
+  readGlobals();
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+  } else {
+    rescaleAxesForArray(oldArr);
+  }
+});
+
+function lamStr() {
+  const LAM_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
+  const u = LAM_U.find(u => lam / u.s >= 0.5) || LAM_U[LAM_U.length - 1];
+  return (lam / u.s).toFixed(2) + ' ' + u.l;
+}
+function updateF0Display() {
+  const u = F0_SCALES[f0_unit_idx];
+  const v = f0 / u.s;
+  document.getElementById('sl-f0').value = Math.round(v);
+  document.getElementById('btn-f0-unit').value = u.l;
+  document.getElementById('val-f0-phys').value = Math.round(v);
+  const lamEl = document.getElementById('val-f0-lam');
+  if (lamEl) lamEl.textContent = lamStr();
+}
+function onFreqChange() {
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    fdtdEngine.setFrequency(f0);
+    lam = C_LIGHT / f0; T_per = 1 / f0;
+    d_lam = d_m * f0 / C_LIGHT;
+    updateF0Display(); updateStats();
+    return;
+  }
+  // Keep physical extents constant: recompute XL1/ylHalf from stored metres
+  if (xPhysMax !== null && f0 > 0) {
+    const newLam = C_LIGHT / f0;
+    XL1    = Math.max(1, xPhysMax  / newLam);
+    ylHalf = Math.max(1, yPhysHalf / newLam);
+    YL0 = -ylHalf; YL1 = ylHalf;
+    document.getElementById('sl-xl1').value = XL1.toFixed(3);
+    document.getElementById('sl-yl').value  = ylHalf.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
+  }
+  readGlobals();
+  updateF0Display();
+  updateTempoDisplay();
+}
+
+const _slF0 = document.getElementById('sl-f0');
+_slF0.addEventListener('input', function() {
+  f0 = Number(this.value) * F0_SCALES[f0_unit_idx].s;
+  onFreqChange();
+});
+_slF0.addEventListener('change', function() {
+  const v = Number(this.value);
+  if (v >= 1000 && f0_unit_idx < F0_SCALES.length - 1) {
+    f0_unit_idx++; this.value = 1;
+  } else if (v <= 1 && f0_unit_idx > 0) {
+    f0_unit_idx--; this.value = 1000;
+  }
+  f0 = Number(this.value) * F0_SCALES[f0_unit_idx].s;
+  onFreqChange();
+});
+document.getElementById('btn-f0-unit').addEventListener('change', function() {
+  const newIdx = F0_SCALES.findIndex(u => u.l === this.value);
+  if (newIdx >= 0) f0_unit_idx = newIdx;
+  onFreqChange();
+});
+
+function updateDDisplay() {
+  const u = D_SCALES[d_unit_idx];
+  const v = d_m / u.s;
+  document.getElementById('sl-d').value = Math.round(v);
+  document.getElementById('btn-d-unit').value = u.l;
+  document.getElementById('val-d-phys').value = Math.round(v);
+  const stDLamRow = document.getElementById('st-dlam-row');
+  if (stDLamRow) stDLamRow.style.display = N_SRC <= 1 ? 'none' : '';
+  const stDLam = document.getElementById('st-d-lam');
+  if (stDLam) stDLam.textContent = d_lam.toFixed(2) + '   ';
+  const ndRow = document.getElementById('st-nd-row');
+  const ndEl  = document.getElementById('st-nd');
+  const showNd = !isDipolMode && N_SRC > 1;
+  if (ndRow) ndRow.style.display = showNd ? '' : 'none';
+  if (ndEl && showNd) {
+    const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
+    const nd_m = (N_SRC - 1) * d_m;
+    const uNd = DIST_U.find(u => nd_m / u.s >= 0.5) || DIST_U[DIST_U.length - 1];
+    const puNd = uNd.l.length < 2 ? uNd.l + ' ' : uNd.l;
+    ndEl.textContent = (nd_m / uNd.s).toFixed(2) + ' ' + puNd;
+  }
+}
+
+const _slD = document.getElementById('sl-d');
+_slD.addEventListener('input', function() {
+  const oldArr = Math.max(1, N_SRC - 1) * d_lam;
+  d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
+  readGlobals();
+  updateDDisplay();
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+  } else {
+    rescaleAxesForArray(oldArr);
+  }
+});
+_slD.addEventListener('change', function() {
+  const oldArr = Math.max(1, N_SRC - 1) * d_lam;
+  const v = Number(this.value);
+  if (v >= 1000 && d_unit_idx < D_SCALES.length - 1) {
+    d_unit_idx++; this.value = 1;
+  } else if (v <= 1 && d_unit_idx > 0) {
+    d_unit_idx--; this.value = 1000;
+  }
+  d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
+  readGlobals();
+  updateDDisplay();
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+  } else {
+    rescaleAxesForArray(oldArr);
+  }
+});
+
+document.getElementById('btn-d-unit').addEventListener('change', function() {
+  const newIdx = D_SCALES.findIndex(u => u.l === this.value);
+  if (newIdx >= 0) d_unit_idx = newIdx;
+  readGlobals();
+  updateDDisplay();
+});
+
+function applyMode() {
+  if (activeEngineId === 'fdtd') return;  // dipol mode not applicable to FDTD
+  isDipolMode = document.getElementById('sel-mode').value === 'dipol';
+  document.getElementById('sg-punkt').style.display  = isDipolMode ? 'none' : '';
+  document.getElementById('sg-dipole').style.display = isDipolMode ? ''     : 'none';
+  document.getElementById('sg-src-mod').classList.toggle('disabled', isDipolMode);
+  screenAcc.fill(0);
+  wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+  recompute();
+  updateDDisplay();
+}
+function applyDipolControls() {
+  dipolInfinite = document.getElementById('chk-infinite').checked;
+  L_lam = Number(document.getElementById('sl-L').value);
+  document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
+  document.getElementById('val-L').value = +L_lam.toFixed(3);
+  screenAcc.fill(0);
+  wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+  recompute();
+}
+document.getElementById('sel-mode').addEventListener('change', applyMode);
+document.getElementById('chk-infinite').addEventListener('change', applyDipolControls);
+document.getElementById('sl-L').addEventListener('input', applyDipolControls);
+
+function preset(fn) { for (let n = 0; n < N_SRC; n++) fn(n); syncRows(); }
+const _presetFns = {
+  alt:  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }),
+  beam: () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }),
+  rnd:  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = Math.random()*2*Math.PI; }),
+  half: () => preset(n => { srcs[n].amp = n<N_SRC/2 ? 0 : 1; srcs[n].fmul=1; srcs[n].phase=0; }),
+};
+document.getElementById('btn-reset').addEventListener('click', () => {
+  screenOverride = false;
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; });
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+    fdtdEngine.clearObstacles();
+  } else {
+    document.getElementById('sel-presets').value = '';
+  }
+});
+document.getElementById('sel-presets').addEventListener('change', e => {
+  if (_presetFns[e.target.value]) {
+    _presetFns[e.target.value]();
+    if (activeEngineId === 'fdtd' && fdtdEngine)
+      fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+  }
+});
+
+document.getElementById('sl-xl1').addEventListener('input', () => {
+  XL1 = Number(document.getElementById('sl-xl1').value);
+  xPhysMax = XL1 * lam;
+  document.getElementById('val-xl1').textContent = fmtLam(XL1);
+  if (scaleLocked) {
+    const slYl = document.getElementById('sl-yl');
+    ylHalf    = Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)));
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slYl.value = ylHalf.toFixed(3);
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+  }
+  recompute();
+});
+
+// ── y-range slider ───────────────────────────────────────────────────────────
+document.getElementById('sl-yl').addEventListener('input', () => {
+  ylHalf    = Number(document.getElementById('sl-yl').value);
+  yPhysHalf = ylHalf * lam;
+  YL0 = -ylHalf; YL1 = ylHalf;
+  document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+  if (scaleLocked) {
+    const slXl1 = document.getElementById('sl-xl1');
+    XL1      = Math.max(1, Math.min(Number(slXl1.max), aspectXL1(ylHalf)));
+    xPhysMax = XL1 * lam;
+    slXl1.value = XL1.toFixed(3);
+    document.getElementById('val-xl1').textContent = fmtLam(XL1);
+  }
+  recompute();
+});
+
+// ── lock button ──────────────────────────────────────────────────────────────
+document.getElementById('btn-lock').addEventListener('click', () => {
+  scaleLocked = !scaleLocked;
+  const btn = document.getElementById('btn-lock');
+  btn.textContent = scaleLocked ? 'X=Y' : 'X≠Y';
+  btn.classList.toggle('active', scaleLocked);
+  if (scaleLocked) {
+    // Snap y to match current x scale on lock activation
+    const slYl = document.getElementById('sl-yl');
+    ylHalf    = aspectYHalf(XL1);
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slYl.value = ylHalf.toFixed(3);
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+    _lockEnforceFw = _layoutFw; _lockEnforceFh = _layoutFh;
+    recompute();
+  }
+});
+
+
+
+document.getElementById('chk-efield').addEventListener('change', e => { showEField = e.target.checked; });
+document.getElementById('chk-bfield').addEventListener('change', e => { showBField = e.target.checked; });
+document.getElementById('btn-timeavg').addEventListener('click', () => {
+  showTimeAvg = !showTimeAvg;
+  document.getElementById('btn-timeavg').classList.toggle('active', showTimeAvg);
+});
+
+document.getElementById('btn-logscale').addEventListener('click', () => {
+  logScale = !logScale;
+  document.getElementById('btn-logscale').classList.toggle('active', logScale);
+});
+
+document.getElementById('btn-fraunhofer').addEventListener('click', () => {
+  if (!(Number.isFinite(rFF) && rFF > 0)) return;
+  // Set XL1 so that rFF lands at the centre of the plot
+  const slXl1 = document.getElementById('sl-xl1');
+  const newXL1 = Math.min(Number(slXl1.max), Math.max(Number(slXl1.min), 2 * rFF));
+  XL1      = newXL1;
+  xPhysMax = XL1 * lam;
+  slXl1.value = XL1.toFixed(3);
+  document.getElementById('val-xl1').textContent = fmtLam(XL1);
+  if (scaleLocked) {
+    const slYl = document.getElementById('sl-yl');
+    ylHalf    = Math.max(1, Math.min(Number(slYl.max), aspectYHalf(XL1)));
+    yPhysHalf = ylHalf * lam;
+    YL0 = -ylHalf; YL1 = ylHalf;
+    slYl.value = ylHalf.toFixed(3);
+    document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+  }
+  recompute();
+});
+
+document.getElementById('sl-speed').addEventListener('input', () => {
+  animSpeed = Number(document.getElementById('sl-speed').value) * 0.1;
+  updateTempoDisplay();
+  syncLoadBarSpeed();
+});
+
+document.getElementById('btn-play').addEventListener('click', () => {
+  isPaused = !isPaused;
+  document.getElementById('btn-play').textContent = isPaused ? '▶' : '⏸';
+  if (!isPaused) wsSendParams();
+});
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  isLight = !isLight;
+  document.body.classList.toggle('light', isLight);
+  document.getElementById('theme-toggle').textContent = isLight ? '☾' : '☀';
+});
+
+// ── Web Worker (inline Liénard-Wiechert solver) ───────────────────────────────
+let wsActive = false, wsPending = false;
+let wsLatestEz = null, wsLatestBx = null, wsLatestBy = null;
+let _worker = null;
+
+const _loadArea  = document.getElementById('load-area');
+const _loadBarEl = document.getElementById('load-bar');
+let   _lastParamKey = null;
+
+function setLoading(on, reloading) {
+  _loadArea.classList.toggle('reloading', on && !!reloading);
+}
+function completeLoading() { setLoading(false); }
+
+function syncLoadBarSpeed() { /* speed now controls simTime rate, bar tracks phase */ }
+
+function _paramKey() {
+  return f0 + '|' + d_m + '|' + N_SRC + '|' +
+    srcs.slice(0, N_SRC).map(s =>
+      s.amp.toFixed(4) + ',' + s.fmul.toFixed(4) + ',' + s.phase.toFixed(4)
+    ).join(';') + '|' + XL1 + '|' + YL0.toFixed(2) + '|' + YL1.toFixed(2);
+}
+
+function wsSendParams() {
+  if (activeEngineId === 'fdtd') return;
+  if (!wsActive || wsPending || !_worker || N_SRC > WS_LW_THRESHOLD) return;
+  const key = _paramKey();
+  const paramsChanged = key !== _lastParamKey;
+  _lastParamKey = key;
+  wsPending = true;
+  setLoading(true, paramsChanged);
+  _worker.postMessage({
+    f0: f0, d_m: d_m, N: N_SRC,
+    srcs: srcs.slice(0, N_SRC).map(s => ({amp:s.amp, fmul:s.fmul, phase:s.phase})),
+    t: simTime * T_per,
+    xl1: XL1, yl0: YL0, yl1: YL1
+  });
+}
+
+function workerInit() {
+  const code = document.getElementById('lw-worker').textContent;
+  const blob = new Blob([code], {type: 'application/javascript'});
+  _worker = new Worker(URL.createObjectURL(blob));
+  _worker.onmessage = ev => {
+    const n = NX * NY, all = new Float32Array(ev.data);
+    wsLatestEz = all.subarray(0, n);
+    wsLatestBx = all.subarray(n, 2 * n);
+    wsLatestBy = all.subarray(2 * n, 3 * n);
+    wsPending = false;
+    completeLoading();
+    if (!isPaused) wsSendParams();
+  };
+  _worker.onerror = err => {
+    console.error('LW worker error:', err);
+    wsPending = false; completeLoading();
+  };
+  wsActive = true;
+  wsSendParams();
+}
+
+// ── Slider step-controls: numbox in label row + «‹›» button group ────────────
+// Each spec: { id, valId, suffix, toDisplay(raw)→display, toRaw(display)→raw,
+//              dispMin, dispMax, dispStep, width, inputType }
+function initSliderControls(specs) {
+  specs.forEach(({id, valId, suffix, toDisplay, toRaw, dispMin, dispMax, dispStep, width, inputType}) => {
+    const sl = document.getElementById(id);
+    if (!sl) return;
+    const slMin = parseFloat(sl.min), slMax = parseFloat(sl.max);
+    const slStep = parseFloat(sl.step) || 1;
+    const fastStep = Math.max(slStep, Math.round((slMax - slMin) * 0.1 / slStep) * slStep);
+
+    // 1. Numbox replaces the existing value-display element in the label row
+    const nb = document.createElement('input');
+    nb.type = inputType || 'number'; nb.className = 'sl-numbox';
+    if (nb.type === 'number') { nb.min = dispMin; nb.max = dispMax; nb.step = dispStep; }
+    nb.style.width = width;
+    nb.value = toDisplay(parseFloat(sl.value));
+    if (valId) {
+      const valEl = document.getElementById(valId);
+      if (valEl) {
+        nb.id = valId;   // take over same ID so existing setters still work
+        valEl.replaceWith(nb);
+        if (suffix) {
+          const sfx = document.createElement('span');
+          sfx.className = 'sl-val-suffix';
+          sfx.textContent = ' ' + suffix;
+          nb.after(sfx);
+        }
+      }
+    }
+
+    // 2. Wrap slider + button-group in flex row (no numbox here)
+    const wrap = document.createElement('div');
+    wrap.className = 'sl-wrap';
+    sl.parentNode.insertBefore(wrap, sl);
+    wrap.appendChild(sl);
+
+    const ctrl = document.createElement('div');
+    ctrl.className = 'sl-controls';
+    const btns = document.createElement('div');
+    btns.className = 'sl-btns';
+    [[-fastStep,'«','Schnell zurück'],[-slStep,'‹','Schritt zurück'],
+     [ slStep,  '›','Schritt vor'],   [ fastStep,'»','Schnell vor']
+    ].forEach(([delta, lbl, title]) => {
+      const btn = document.createElement('button');
+      btn.className = 'sl-btn'; btn.textContent = lbl; btn.title = title;
+      btn.addEventListener('click', () => {
+        const snapped = Math.round(
+          Math.min(slMax, Math.max(slMin, parseFloat(sl.value) + delta)) / slStep) * slStep;
+        sl.value = snapped;
+        nb.value = toDisplay(snapped);
+        sl.dispatchEvent(new Event('input', {bubbles: true}));
+      });
+      btns.appendChild(btn);
+    });
+    ctrl.appendChild(btns);
+    wrap.appendChild(ctrl);
+
+    // 3. numbox → slider
+    function applyNumbox() {
+      let dv = parseFloat(nb.value);
+      if (isNaN(dv)) { nb.value = toDisplay(parseFloat(sl.value)); return; }
+      dv = Math.min(parseFloat(dispMax), Math.max(parseFloat(dispMin), dv));
+      dv = Math.round(dv / parseFloat(dispStep)) * parseFloat(dispStep);
+      const raw = Math.min(slMax, Math.max(slMin, toRaw(dv)));
+      sl.value = raw;
+      nb.value = toDisplay(parseFloat(sl.value));
+      sl.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+    nb.addEventListener('change', applyNumbox);
+    nb.addEventListener('keydown', e => { if (e.key === 'Enter') { applyNumbox(); nb.blur(); } });
+
+    // 4. slider → numbox (drag / external changes)
+    sl.addEventListener('input', () => { nb.value = toDisplay(parseFloat(sl.value)); });
+  });
+}
+initSliderControls([
+  { id:'sl-N',     valId:'val-N',       suffix:null, width:'46px',
+    toDisplay: v => Math.round(v),  toRaw: v => v,
+    dispMin:1, dispMax:1000, dispStep:1 },
+  { id:'sl-d',     valId:'val-d-phys',  suffix:null, width:'46px',
+    toDisplay: v => Math.round(v),  toRaw: v => v,
+    dispMin:1, dispMax:1000, dispStep:1 },
+  { id:'sl-f0',    valId:'val-f0-phys', suffix:null, width:'46px',
+    toDisplay: v => Math.round(v),  toRaw: v => v,
+    dispMin:1, dispMax:1000, dispStep:1 },
+  { id:'sl-L',     valId:'val-L',       suffix:null, width:'52px',
+    toDisplay: v => +parseFloat(v).toFixed(3),  toRaw: v => v,
+    dispMin:0.125, dispMax:100, dispStep:0.125 },
+  { id:'sl-src-a', valId:'val-src-a',   suffix:null, width:'36px',
+    toDisplay: v => +(v/10).toFixed(1),  toRaw: v => Math.round(v*10),
+    dispMin:0, dispMax:10, dispStep:0.1 },
+  { id:'sl-src-f', valId:'val-src-f',   suffix:null, width:'36px',
+    toDisplay: v => +(v/10).toFixed(1),  toRaw: v => Math.round(v*10),
+    dispMin:0, dispMax:10, dispStep:0.1 },
+  { id:'sl-src-p', valId:'val-src-p',   suffix:null, width:'52px', inputType:'text',
+    toDisplay: v => { const n = +(v/12).toFixed(2); return (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); },
+    toRaw: v => { const f = parseFloat(String(v).replace('+ ','').replace('- ','-')); return isNaN(f) ? 0 : Math.round(f*12); },
+    dispMin:-2, dispMax:2, dispStep:1/12 },
+]);
+
+document.body.classList.add('light');
+buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisplay(); syncLoadBarSpeed(); workerInit();
+// reflect initial lock state on button
+{ const b = document.getElementById('btn-lock'); b.textContent = 'X=Y'; b.classList.add('active'); }
+
+// Sidebar toggle — mobile: slide-in overlay; desktop: collapse sidebar width
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const btn     = document.getElementById('btn-sidebar-toggle');
+  const isMobL  = window.innerWidth <= 900 && window.matchMedia('(orientation: landscape)').matches;
+  if (isMobL) {
+    sidebar.classList.toggle('mobile-open');
+  } else {
+    const hiding = !sidebar.classList.contains('sidebar-hidden');
+    sidebar.classList.toggle('sidebar-hidden');
+    btn.textContent = hiding ? '›' : '‹';
+  }
+}
+document.getElementById('btn-sidebar-toggle').addEventListener('click', toggleSidebar);
+document.getElementById('sb-collapsed-strip').addEventListener('click', toggleSidebar);
+// Close sidebar when tapping outside it on mobile
+document.addEventListener('touchstart', e => {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar.classList.contains('mobile-open')) return;
+  const toggle = document.getElementById('btn-sidebar-toggle');
+  if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+    sidebar.classList.remove('mobile-open');
+  }
+}, { passive: true });
+
+// ── Engine switcher ───────────────────────────────────────────────────────────
+document.getElementById('btn-engine-lw')  .addEventListener('click', () => switchEngine('lw'));
+document.getElementById('btn-engine-fdtd').addEventListener('click', () => switchEngine('fdtd'));
+
+// ── FDTD obstacle draw mode ───────────────────────────────────────────────────
+function canvasPxToLambda(cx, cy) {
+  return {
+    xl: Math.max(XL0, Math.min(XL1, XL0 + (cx - _layoutFx0) / _layoutFw * (XL1 - XL0))),
+    yl: Math.max(YL0, Math.min(YL1, YL0 + (1 - (cy - _layoutFy0) / _layoutFh) * (YL1 - YL0)))
+  };
+}
+canvas.addEventListener('mousedown', e => {
+  if (activeEngineId !== 'fdtd' || !fdtdDrawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  fdtdDrawStart   = canvasPxToLambda(e.clientX - rect.left, e.clientY - rect.top);
+  fdtdDrawCurrent = { ...fdtdDrawStart };
+  e.preventDefault();
+});
+canvas.addEventListener('mousemove', e => {
+  if (activeEngineId !== 'fdtd' || !fdtdDrawMode || !fdtdDrawStart) return;
+  const rect = canvas.getBoundingClientRect();
+  fdtdDrawCurrent = canvasPxToLambda(e.clientX - rect.left, e.clientY - rect.top);
+});
+canvas.addEventListener('mouseup', e => {
+  if (activeEngineId !== 'fdtd' || !fdtdDrawMode || !fdtdDrawStart) return;
+  const rect = canvas.getBoundingClientRect();
+  fdtdDrawCurrent = canvasPxToLambda(e.clientX - rect.left, e.clientY - rect.top);
+  const x0 = Math.min(fdtdDrawStart.xl, fdtdDrawCurrent.xl);
+  const x1 = Math.max(fdtdDrawStart.xl, fdtdDrawCurrent.xl);
+  const y0 = Math.min(fdtdDrawStart.yl, fdtdDrawCurrent.yl);
+  const y1 = Math.max(fdtdDrawStart.yl, fdtdDrawCurrent.yl);
+  if ((x1 - x0) > 0.05 || (y1 - y0) > 0.05) fdtdEngine.addObstacle({ x0λ: x0, y0λ: y0, x1λ: x1, y1λ: y1 });
+  fdtdDrawStart = fdtdDrawCurrent = null;
+});
+canvas.addEventListener('touchstart', e => {
+  if (activeEngineId !== 'fdtd' || !fdtdDrawMode) return;
+  const rect = canvas.getBoundingClientRect();
+  fdtdDrawStart   = canvasPxToLambda(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+  fdtdDrawCurrent = { ...fdtdDrawStart };
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  if (activeEngineId !== 'fdtd' || !fdtdDrawMode || !fdtdDrawStart) return;
+  const rect = canvas.getBoundingClientRect();
+  fdtdDrawCurrent = canvasPxToLambda(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
+  e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchend', () => {
+  if (activeEngineId !== 'fdtd' || !fdtdDrawMode || !fdtdDrawStart) return;
+  const x0 = Math.min(fdtdDrawStart.xl, fdtdDrawCurrent.xl);
+  const x1 = Math.max(fdtdDrawStart.xl, fdtdDrawCurrent.xl);
+  const y0 = Math.min(fdtdDrawStart.yl, fdtdDrawCurrent.yl);
+  const y1 = Math.max(fdtdDrawStart.yl, fdtdDrawCurrent.yl);
+  if ((x1 - x0) > 0.05 || (y1 - y0) > 0.05) fdtdEngine.addObstacle({ x0λ: x0, y0λ: y0, x1λ: x1, y1λ: y1 });
+  fdtdDrawStart = fdtdDrawCurrent = null;
+});
+
+// ── FDTD controls ─────────────────────────────────────────────────────────────
+document.getElementById('btn-draw-fdtd').addEventListener('click', () => {
+  fdtdDrawMode = !fdtdDrawMode;
+  document.getElementById('btn-draw-fdtd').classList.toggle('active', fdtdDrawMode);
+  canvas.classList.toggle('draw-mode', fdtdDrawMode);
+});
+document.getElementById('btn-clear-obs-fdtd').addEventListener('click', () => {
+  if (fdtdEngine) fdtdEngine.clearObstacles();
+});
+document.getElementById('sl-fdtd-speed').addEventListener('input', function() {
+  if (fdtdEngine) fdtdEngine.setStepsPerFrame(+this.value);
+  document.getElementById('val-fdtd-speed').textContent = this.value;
+});
+
+// ── FDTD obstacle presets ─────────────────────────────────────────────────────
+document.getElementById('btn-fdtd-einzelspalt').addEventListener('click', () => {
+  N_SRC = 1;
+  document.getElementById('sl-N').value = 1;
+  document.getElementById('val-N').value = 1;
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; });
+  buildRows();
+  if (fdtdEngine) { fdtdEngine.setSources(1, d_lam, srcs.slice(0, 1)); fdtdEngine.applyPreset('einzelspalt'); }
+});
+document.getElementById('btn-fdtd-doppelspalt').addEventListener('click', () => {
+  N_SRC = 1;
+  document.getElementById('sl-N').value = 1;
+  document.getElementById('val-N').value = 1;
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; });
+  buildRows();
+  if (fdtdEngine) { fdtdEngine.setSources(1, d_lam, srcs.slice(0, 1)); fdtdEngine.applyPreset('doppelspalt'); }
+});
+document.getElementById('btn-fdtd-reflektor').addEventListener('click', () => {
+  N_SRC = 2;
+  document.getElementById('sl-N').value = 2;
+  document.getElementById('val-N').value = 2;
+  preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase=0; });
+  buildRows();
+  if (fdtdEngine) { fdtdEngine.setSources(2, d_lam, srcs.slice(0, 2)); fdtdEngine.applyPreset('reflektor'); }
+});
+
+requestAnimationFrame(render);
+// Apply initial dipole UI state after all variables are declared
+document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
+document.getElementById('sg-src-mod').classList.toggle('disabled', isDipolMode);
+document.getElementById('val-L').textContent = L_lam.toFixed(3).replace(/\.?0+$/, '');
+</script>
+</body>
+</html>
