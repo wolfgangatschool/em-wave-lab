@@ -323,6 +323,20 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   color: var(--gold); border-color: var(--gold); opacity: 1;
   background: color-mix(in srgb, var(--gold) 12%, var(--panel));
 }
+#btn-logscale {
+  position: absolute; z-index: 10;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
+  height: 24px; padding: 0 6px;
+  cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
+  display: flex; align-items: center; justify-content: center;
+  white-space: nowrap;
+}
+#btn-logscale:hover { opacity: 1; }
+#btn-logscale.active {
+  color: var(--gold); border-color: var(--gold); opacity: 1;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel));
+}
 
 /* reset browser defaults for both axis sliders */
 #y-slider-strip input[type="range"],
@@ -760,6 +774,7 @@ self.onmessage = function(ev) {
         <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
       </div>
       <button id="btn-lock" title="Skalierung koppeln">X≠Y</button>
+      <button id="btn-logscale" title="Logarithmische Skala">log</button>
       <div id="y-slider-strip">
         <span class="ax-val" id="val-yl">4 λ</span>
         <input type="range" id="sl-yl" min="0.5" max="30" value="4" step="0.5">
@@ -795,6 +810,7 @@ function cmRGB(t) {
 
 // ── Grid constants ────────────────────────────────────────────────────────────
 const NX = 110, NY = 90;
+const NY_SCR = 1024;   // screen intensity curve resolution (independent of field grid)
 const XL0 = 0.0;
 const MIN_R_LAM = 0.05;  // exclusion radius in wavelengths
 let   XL1 = 12;
@@ -894,14 +910,18 @@ const yGrid = new Float64Array(NY);
 const _phasors = {};   // fmul_key → { re: Float32Array, im: Float32Array, omega: number }
 let _phasorsValid = false;
 
-const screenAcc   = new Float64Array(NY);  // EMA of Ez² → time-average ≈ ½A²
-const screenInst  = new Float64Array(NY);  // instantaneous Ez² for blue curve
+const screenAcc   = new Float64Array(NY_SCR);  // time-averaged intensity (exact from phasors)
+const screenInst  = new Float64Array(NY_SCR);  // instantaneous intensity for blue curve
 const SCREEN_DECAY = 0.05;
+// Screen-column phasors at NY_SCR resolution (recomputed when screenLam or sources change)
+const _scr = {};   // fmul_key → { re, im, omega }
+let   _scrLam = -1;
 
 const acc2D = new Float32Array(NX * NY);
 const rEff  = new Float32Array(NX * NY);
 const ACC2D_DECAY = 0.05;
 let showTimeAvg = false;
+let logScale    = false;
 
 let simTime = 0;
 let lastTs  = null;
@@ -1057,16 +1077,17 @@ function recompute() {
   for (let i = 0; i < NX; i++)
     for (let j = 0; j < NY; j++)
       rEff[i*NY+j] = Math.sqrt(xGrid[i]*xGrid[i] + yGrid[j]*yGrid[j]) + 1e-10;
-  computePhasors();
+  computePhasors();  // sets acc2D analytically — do NOT zero it after
   // For large N skip the LW worker; null out stale results
   if (N_SRC > WS_LW_THRESHOLD) { wsLatestEz = null; wsLatestBx = null; wsLatestBy = null; }
+  else wsSendParams();  // (re)start LW loop if it was stopped (e.g. N was > threshold)
   screenAcc.fill(0);
-  acc2D.fill(0);
   updateStats();
 }
 
 function computePhasors() {
   _phasorsValid = false;
+  _scrLam = -1;   // invalidate screen phasors too
   for (const k in _phasors) delete _phasors[k];
   const D = d_lam * lam;
   const minR = MIN_R_LAM * lam;
@@ -1106,6 +1127,40 @@ function computePhasors() {
       acc2D[k] += 0.5 * (g.re[k] * g.re[k] + g.im[k] * g.im[k]);
   }
   _phasorsValid = true;
+}
+
+function computeScreenPhasors() {
+  _scrLam = screenLam;
+  for (const k in _scr) delete _scr[k];
+  if (isDipolMode) return;
+  const xscr = screenLam * lam;
+  const D = d_lam * lam;
+  const minR = MIN_R_LAM * lam;
+  for (let n = 0; n < N_SRC; n++) {
+    const {amp, fmul, phase} = srcs[n];
+    if (amp < 1e-6) continue;
+    const key = fmul.toFixed(4);
+    if (!_scr[key]) _scr[key] = {re: new Float64Array(NY_SCR), im: new Float64Array(NY_SCR), omega: fmul * 2 * Math.PI * f0};
+    const g = _scr[key];
+    const kn = fmul * 2 * Math.PI * f0 / C_LIGHT;
+    const yn = (n - (N_SRC - 1) / 2) * D;
+    for (let j = 0; j < NY_SCR; j++) {
+      const y_j = (YL0 + (YL1 - YL0) * j / (NY_SCR - 1)) * lam;
+      const dy = y_j - yn;
+      const r = Math.sqrt(xscr * xscr + dy * dy);
+      if (r < minR) continue;
+      const phi = phase - kn * r;
+      const ri = amp / r;
+      g.re[j] += ri * Math.cos(phi);
+      g.im[j] += ri * Math.sin(phi);
+    }
+  }
+  screenAcc.fill(0);
+  for (const key in _scr) {
+    const g = _scr[key];
+    for (let j = 0; j < NY_SCR; j++)
+      screenAcc[j] += 0.5 * (g.re[j] * g.re[j] + g.im[j] * g.im[j]);
+  }
 }
 
 function computeField(t) {
@@ -1224,11 +1279,54 @@ function render(ts) {
   }
   offCtx.putImageData(imgData, 0, 0);
 
-  const is = iScreen();
-  for (let j = 0; j < NY; j++) {
-    const v = Ez[is * NY + j];
-    screenInst[j] = v * v;
-    screenAcc[j]  = screenAcc[j] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+  if (!isDipolMode && _phasorsValid) {
+    // Recompute screen phasors if screenLam moved
+    if (_scrLam !== screenLam) computeScreenPhasors();
+    // Instantaneous: E(y,t) = Re[exp(iωt)·Z_scr(y)]
+    screenInst.fill(0);
+    const t_scr = simTime * T_per;
+    for (const key in _scr) {
+      const g = _scr[key];
+      const ct = Math.cos(g.omega * t_scr);
+      const st = Math.sin(g.omega * t_scr);
+      for (let j = 0; j < NY_SCR; j++) {
+        const v = g.re[j] * ct - g.im[j] * st;
+        screenInst[j] += v * v;
+      }
+    }
+  } else if (isDipolMode) {
+    // Fine-grid dipole evaluation at screen column
+    const xscr = screenLam * lam;
+    const t_scr = simTime * T_per;
+    const om = 2 * Math.PI * f0, k_dip = om / C_LIGHT;
+    const Ldip = L_lam * lam;
+    const M_dip = Math.max(20, Math.min(300, Math.ceil(L_lam * 16)));
+    for (let j = 0; j < NY_SCR; j++) {
+      const y_j = (YL0 + (YL1 - YL0) * j / (NY_SCR - 1)) * lam;
+      let ez = 0;
+      if (dipolInfinite) {
+        ez = Math.cos(om * t_scr - k_dip * xscr);
+      } else {
+        for (let m = 0; m < M_dip; m++) {
+          const yp = -Ldip / 2 + m / (M_dip - 1) * Ldip;
+          const r = Math.sqrt(xscr * xscr + (y_j - yp) * (y_j - yp));
+          if (r < MIN_R_LAM * lam) continue;
+          ez += Math.cos(Math.PI * yp / Ldip) * Math.cos(om * t_scr - k_dip * r) / r;
+        }
+      }
+      screenInst[j] = ez * ez;
+      screenAcc[j] = screenAcc[j] * (1 - SCREEN_DECAY) + ez * ez * SCREEN_DECAY;
+    }
+  } else {
+    // LW mode (small N): interpolate coarse Ez column to fine grid
+    const is = iScreen();
+    for (let j = 0; j < NY_SCR; j++) {
+      const fj = j / (NY_SCR - 1) * (NY - 1);
+      const j0 = Math.min(Math.floor(fj), NY - 2);
+      const v = Ez[is * NY + j0] + (Ez[is * NY + j0 + 1] - Ez[is * NY + j0]) * (fj - j0);
+      screenInst[j] = v * v;
+      screenAcc[j]  = screenAcc[j] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
+    }
   }
 
   draw();
@@ -1634,6 +1732,15 @@ function draw() {
   const iPW      = SCREEN_W - AXIS_W - RIGHT_W - 2;
   const RIGHT_X0 = CURVE_X0 + iPW + 1;
 
+  // Position log-scale button under the intensity plot
+  { const btnLog = document.getElementById('btn-logscale');
+    if (btnLog) {
+      btnLog.style.left  = (SX + AXIS_W) + 'px';
+      btnLog.style.width = (RIGHT_X0 - SX - AXIS_W - 1) + 'px';
+      btnLog.style.top   = Math.round(FH + (XAXIS2_H - 24) / 2) + 'px';
+    }
+  }
+
   ctx.fillStyle = BG;
   ctx.fillRect(SX, 0, SCREEN_W, H);
 
@@ -1666,17 +1773,49 @@ function draw() {
   ctx.fillStyle = AXIS; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.fillText('y / λ', 0, 0);
   ctx.restore();
-  [0.25, 0.5, 0.75, 1.0].forEach(f => {
-    const xp = CURVE_X0 + f * iPW;
-    ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
-  });
+  // ── Compute log-scale range (from screenAcc, shared by grid + both curves) ──
+  let _logDecades = 4;
+  if (logScale) {
+    let Imax = 1e-30, Imin2 = 1;
+    for (let j = 0; j < NY_SCR; j++) if (screenAcc[j] > Imax) Imax = screenAcc[j];
+    Imin2 = Imax;
+    for (let j = 0; j < NY_SCR; j++) { const v = screenAcc[j]; if (v > Imax * 1e-8 && v < Imin2) Imin2 = v; }
+    _logDecades = Math.min(6, Math.max(1, Math.ceil(-Math.log10(Math.max(Imin2 / Imax, 1e-8)))));
+  }
 
-  // ── Precompute analytical intensity pattern (far-field approximation) ──
+  // ── Intensity-plot grid ──
+  ctx.strokeStyle = GRID; ctx.lineWidth = 0.4;
+  if (!logScale) {
+    [0.25, 0.5, 0.75, 1.0].forEach(f => {
+      const xp = CURVE_X0 + f * iPW;
+      ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+    });
+  } else {
+    // Major lines at each power-of-10, minor lines at 2–9 × decade
+    for (let k = 0; k <= _logDecades; k++) {
+      const xp = CURVE_X0 + (1 - k / _logDecades) * iPW;
+      ctx.strokeStyle = k === 0 ? AXIS + '80' : GRID;
+      ctx.lineWidth = k === 0 ? 0.6 : 0.4;
+      ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+    }
+    // Minor ticks: 2–9 within each decade span
+    ctx.strokeStyle = GRID; ctx.lineWidth = 0.25;
+    for (let k = 0; k < _logDecades; k++) {
+      for (let m = 2; m <= 9; m++) {
+        const f = (k + 1 - Math.log10(m)) / _logDecades;
+        if (f <= 0 || f >= 1) continue;
+        const xp = CURVE_X0 + f * iPW;
+        ctx.beginPath(); ctx.moveTo(xp, fy0); ctx.lineTo(xp, fy0 + fh); ctx.stroke();
+      }
+    }
+  }
+
+  // ── Analytical intensity pattern for dipole mode (point sources use screenAcc) ──
   let I_buf_ana = null, I_peak_ana = 0;
   if (isDipolMode && !dipolInfinite) {
-    I_buf_ana = new Float32Array(NY);
-    for (let j = 0; j < NY; j++) {
-      const yLam  = YL0 + (YL1 - YL0) * j / (NY - 1);
+    I_buf_ana = new Float32Array(NY_SCR);
+    for (let j = 0; j < NY_SCR; j++) {
+      const yLam  = YL0 + (YL1 - YL0) * j / (NY_SCR - 1);
       const r0    = Math.sqrt(screenLam * screenLam + yLam * yLam);
       const sinT  = yLam / r0;
       const u     = L_lam * sinT;
@@ -1687,50 +1826,49 @@ function draw() {
       I_buf_ana[j] = (F * F) / (r0 * r0);
       if (I_buf_ana[j] > I_peak_ana) I_peak_ana = I_buf_ana[j];
     }
-  } else if (!isDipolMode) {
-    const allSameFreq = Array.from({length: N_SRC}, (_, n) => n)
-      .every(n => Math.abs(srcs[n].fmul - 1.0) < 0.01);
-    if (allSameFreq && N_SRC > 1) {
-      I_buf_ana = new Float32Array(NY);
-      for (let j = 0; j < NY; j++) {
-        const yLam = YL0 + (YL1 - YL0) * j / (NY - 1);
-        let re = 0, im = 0;
-        for (let n = 0; n < N_SRC; n++) {
-          if (srcs[n].amp < 1e-6) continue;
-          const yn  = (n - (N_SRC - 1) / 2) * d_lam;
-          const r_n = Math.sqrt(screenLam*screenLam + (yLam - yn)*(yLam - yn));
-          const ph  = 2 * Math.PI * srcs[n].fmul * r_n - srcs[n].phase;
-          re += srcs[n].amp / r_n * Math.cos(ph);
-          im += srcs[n].amp / r_n * Math.sin(ph);
-        }
-        I_buf_ana[j] = re*re + im*im;
-        if (I_buf_ana[j] > I_peak_ana) I_peak_ana = I_buf_ana[j];
-      }
-    }
   }
 
-  // Blue: instantaneous Ez², self-normalized so peak = 1.
-  const Inorm = Math.max(...screenInst, 1e-30);
+  // Helper: map intensity value to [0,1] plot fraction (linear or log)
+  function iScale(arr) {
+    let Imax = 1e-30;
+    for (let j = 0; j < NY_SCR; j++) if (arr[j] > Imax) Imax = arr[j];
+    if (!logScale) return v => Math.min(v / Imax, 1);
+    const floor = Imax * Math.pow(10, -_logDecades);
+    return v => Math.max(0, 1 + Math.log10(Math.max(v, floor) / Imax) / _logDecades);
+  }
+
+  // Blue: instantaneous Ez²
+  const scaleI = iScale(screenInst);
   ctx.beginPath();
-  for (let j = 0; j < NY; j++) {
-    const xp = CURVE_X0 + Math.min(screenInst[j] / Inorm, 1) * iPW;
-    const yp = fy0 + (1 - j / (NY - 1)) * fh;
+  for (let j = 0; j < NY_SCR; j++) {
+    const xp = CURVE_X0 + scaleI(screenInst[j]) * iPW;
+    const yp = fy0 + (1 - j / (NY_SCR - 1)) * fh;
     j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
   }
   ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
 
-  // Gold: analytical pattern, self-normalized so peak = 1.
+  // Gold: time-averaged intensity Ī(y)
   ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([3, 4]);
   if (isDipolMode && dipolInfinite) {
     ctx.beginPath();
     ctx.moveTo(CURVE_X0 + iPW, fy0);
     ctx.lineTo(CURVE_X0 + iPW, fy0 + fh);
     ctx.stroke();
-  } else if (I_buf_ana && I_peak_ana > 0) {
+  } else if (isDipolMode && I_buf_ana && I_peak_ana > 0) {
+    const scaleA = logScale ? iScale(I_buf_ana) : (v => v / I_peak_ana);
     ctx.beginPath();
-    for (let j = 0; j < NY; j++) {
-      const xp = CURVE_X0 + (I_buf_ana[j] / I_peak_ana) * iPW;
-      const yp = fy0 + (1 - j / (NY - 1)) * fh;
+    for (let j = 0; j < NY_SCR; j++) {
+      const xp = CURVE_X0 + scaleA(I_buf_ana[j]) * iPW;
+      const yp = fy0 + (1 - j / (NY_SCR - 1)) * fh;
+      j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
+    }
+    ctx.stroke();
+  } else if (!isDipolMode) {
+    const scaleA = iScale(screenAcc);
+    ctx.beginPath();
+    for (let j = 0; j < NY_SCR; j++) {
+      const xp = CURVE_X0 + scaleA(screenAcc[j]) * iPW;
+      const yp = fy0 + (1 - j / (NY_SCR - 1)) * fh;
       j === 0 ? ctx.moveTo(xp, yp) : ctx.lineTo(xp, yp);
     }
     ctx.stroke();
@@ -1794,7 +1932,7 @@ function draw() {
   ctx.setLineDash([]);
   ctx.font = fSub;
   ctx.textAlign = 'left';
-  ctx.fillText('(Fernfeldgrenze)', RX - tw2 - gap - swL, LY2 + lh);
+  ctx.fillText('(Fernfeld)', RX - tw2 - gap - swL, LY2 + lh);
 
   ctx.beginPath(); ctx.moveTo(fx0, FH); ctx.lineTo(FIELD_W, FH);
   ctx.strokeStyle = BORDER; ctx.lineWidth = 0.6; ctx.stroke();
@@ -2127,8 +2265,12 @@ document.getElementById('chk-efield').addEventListener('change', e => { showEFie
 document.getElementById('chk-bfield').addEventListener('change', e => { showBField = e.target.checked; });
 document.getElementById('btn-timeavg').addEventListener('click', () => {
   showTimeAvg = !showTimeAvg;
-  acc2D.fill(0);
   document.getElementById('btn-timeavg').classList.toggle('active', showTimeAvg);
+});
+
+document.getElementById('btn-logscale').addEventListener('click', () => {
+  logScale = !logScale;
+  document.getElementById('btn-logscale').classList.toggle('active', logScale);
 });
 
 document.getElementById('btn-fraunhofer').addEventListener('click', () => {
