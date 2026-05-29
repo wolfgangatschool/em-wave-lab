@@ -512,6 +512,10 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   /* Lock button: match btn-timeavg size on mobile */
   #btn-lock { height: 24px; padding: 0 7px; font-size: 11px; }
 
+  /* Collapsed strip: always visible on mobile (sidebar uses mobile-open, not sidebar-hidden) */
+  .sidebar .sb-collapsed-strip { display: flex; }
+  .sidebar.mobile-open .sb-collapsed-strip { display: none; }
+
 }
 
 /* ── Portrait: rotate prompt ─────────────────────────────────────── */
