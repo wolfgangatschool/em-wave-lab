@@ -1,0 +1,237 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{parskip}
+\geometry{margin=2.5cm}
+
+\title{\textbf{EM-Wellen Simulation}\\[0.4em]
+       \large Mathematischer Hintergrund}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\bigskip
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Koordinatensystem und Gitter}
+
+Die Simulation zeigt ein zweidimensionales $(x,y)$-Schnittbild.  Alle
+Quellen liegen bei $x = 0$ und sind entlang der $y$-Achse angeordnet.  Das
+Berechnungsgitter hat $N_x \times N_y = 110 \times 90$ Punkte; die physikalischen
+Koordinaten sind
+\[
+  x_i = \Bigl(x_{\min} + \tfrac{i}{N_x - 1}(x_{\max} - x_{\min})\Bigr)\lambda,
+  \qquad
+  y_j = \Bigl(y_{\min} + \tfrac{j}{N_y - 1}(y_{\max} - y_{\min})\Bigr)\lambda,
+\]
+wobei $\lambda = c/f_0$ die Vakuumwellenlänge ist und $c = 299\,792\,458\ \text{m/s}$.
+
+Die Simulation läuft in Echtzeit.  Die simulierte Zeit wird als
+$t_{\text{sim}} = t_{\text{sim}} + \Delta t \cdot v_{\text{anim}}$ fortgeschrieben,
+wobei $\Delta t$ die reale Bildzeit und $v_{\text{anim}}$ ein wählbarer
+Beschleunigungsfaktor ist.  Die physikalische Zeit ergibt sich zu
+$t = t_{\text{sim}} \cdot T$, mit der Periodendauer $T = 1/f_0$.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Modus 1: Punkt-Quellen (skalare Näherung)}
+
+\subsection{Analytisches Nahfeld-Modell (Haupt-Thread)}
+
+Als schneller Fallback berechnet der Haupt-Thread das skalare 2D-Wellenfeld
+als Überlagerung zylindrischer Wellen:
+\[
+  E_z(x, y, t) = \sum_{n=0}^{N-1}
+    \frac{A_n}{r_n}\,\cos\!\bigl(\omega_n t + \varphi_n - k_n r_n\bigr),
+\]
+mit
+\[
+  r_n = \sqrt{x^2 + (y - y_n)^2}, \quad
+  \omega_n = 2\pi f_0 f_{\text{mul},n}, \quad
+  k_n = \omega_n / c,
+\]
+und den Quellpositionen $y_n = (n - (N-1)/2)\,d$ für gleichmäßigen Abstand $d$.
+Die Amplitude fällt wie $1/r$ ab, was der Abstrahlung einer Linienquelle in 2D
+entspricht.  Punkte mit $r_n < 0{,}05\lambda$ werden ausgeblendet, um die
+$1/r$-Singularität zu vermeiden.
+
+\subsection{Liénard-Wiechert-Felder (Web-Worker)}
+
+Für die exakten elektromagnetischen Felder einschließlich der Magnetfeldlinien
+verwendet die Simulation die \emph{Liénard-Wiechert-Gleichungen} für eine
+schwach relativistische, oszillierende Punktladung.
+
+\paragraph{Quellbewegung.}
+Jede Quelle $n$ schwingt in $z$-Richtung:
+\[
+  z_{\text{s},n}(t) = z_0 A_n\,\sin(\omega_n t_r + \varphi_n), \quad
+  \dot z_{\text{s}} = z_0 A_n \omega_n \cos(\omega_n t_r + \varphi_n), \quad
+  \ddot z_{\text{s}} = -z_0 A_n \omega_n^2 \sin(\omega_n t_r + \varphi_n),
+\]
+mit einer kleinen Amplitude $z_0 = 10^{-4}\lambda$.  Die Simulation ist auf die
+$z$-Komponente des $E$-Feldes und die Magnetfeldlinien in der $(x,y)$-Ebene
+beschränkt.
+
+\paragraph{Retardierte Zeit.}
+Die retardierte Zeit $t_r$ ist die Lösung der impliziten Gleichung
+\[
+  t - t_r = \frac{|\mathbf{r} - \mathbf{r}_{\text{s}}(t_r)|}{c},
+\]
+die mit einem Newton-Verfahren (8 Iterationen) gelöst wird.
+Startwert: $t_r^{(0)} = t - r/c$ mit $r = \sqrt{x^2 + (y-y_n)^2}$.
+Die Newton-Iteration lautet
+\[
+  t_r \leftarrow t_r - \frac{f(t_r)}{f'(t_r)}, \quad
+  f = t - t_r - \frac{R(t_r)}{c}, \quad
+  f' = -1 + \frac{\hat{\mathbf{n}}\cdot\boldsymbol{\beta}(t_r) \cdot c}{1},
+\]
+wobei $\mathbf{R} = \mathbf{r} - \mathbf{r}_{\text{s}}(t_r)$,
+$\hat{\mathbf{n}} = \mathbf{R}/R$ und
+$\boldsymbol{\beta} = \dot{\mathbf{r}}_{\text{s}}/c$.
+
+\paragraph{Liénard-Wiechert-Felder.}
+Nach Konvergenz werden der Geschwindigkeitsterm (Nahfeld) und der
+Strahlungsterm (Fernfeld) ausgewertet:
+\begin{align}
+  \mathbf{E} &= \underbrace{\frac{(\hat{\mathbf{n}} - \boldsymbol{\beta})(1-\beta^2)}
+                              {\kappa^3 R^2}}_{\text{Nahfeld / Coulomb-Term}}
+             + \underbrace{\frac{\hat{\mathbf{n}}\times\bigl[(\hat{\mathbf{n}}-\boldsymbol{\beta})\times\dot{\boldsymbol{\beta}}\bigr]}
+                              {c\,\kappa^3 R}}_{\text{Fernfeld / Strahlungsterm}},
+  \\[6pt]
+  \mathbf{B} &= \frac{\hat{\mathbf{n}}\times\mathbf{E}}{c},
+\end{align}
+wobei $\kappa = 1 - \hat{\mathbf{n}}\cdot\boldsymbol{\beta}$ der
+Doppler-Faktor ist (alle Größen an der retardierten Zeit ausgewertet).
+
+Da die Quellen ausschließlich in $z$-Richtung schwingen und das
+Beobachtungsfeld in der $(x,y)$-Ebene liegt, sind die sichtbaren
+Feldkomponenten
+\[
+  E_z,\quad B_x = \frac{n_y E_z - n_z E_y}{c}, \quad
+  B_y = \frac{n_z E_x - n_x E_z}{c}.
+\]
+
+\paragraph{Bilineare Hochskalierung.}
+Die Felder werden auf einem groben Gitter ($55 \times 45$) im Worker
+berechnet und danach bilinear auf das Darstellungsgitter ($110 \times 90$)
+hochskaliert.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Modus 2: Dipolantenne (unendlich lang)}
+
+Im Grenzfall einer unendlich langen Antenne vereinfacht sich das Feld zur
+ebenen Welle:
+\[
+  E_z(x, y, t) = \cos(\omega t - k x), \qquad B_y = -\frac{E_z}{c}.
+\]
+Dies entspricht einer transversal-elektromagnetischen (TEM) Welle, die sich
+in $+x$-Richtung ausbreitet.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Modus 3: Endliche Dipolantenne}
+
+Eine Dipolantenne der Länge $L = L_\lambda \lambda$ trägt eine stehende
+Sinuswelle als Stromverteilung:
+\[
+  I(y') \propto \cos\!\Bigl(\frac{\pi y'}{L}\Bigr), \quad y' \in [-L/2,\ L/2].
+\]
+Das abgestrahlte Feld wird numerisch durch Überlagerung von $M$ Punktquellen
+(Huygens-Elemente) berechnet:
+\[
+  E_z(x, y, t) = \sum_{m=0}^{M-1}
+    \cos\!\Bigl(\frac{\pi y_m'}{L}\Bigr)\,
+    \frac{\cos(\omega t - k\,r_m)}{r_m},
+\]
+mit $y_m' = -L/2 + m\,L/(M-1)$ und $r_m = \sqrt{x^2 + (y - y_m')^2}$.
+Die Anzahl der Segmente ist $M = \text{clip}(16\,L_\lambda,\,20,\,300)$.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Fernfeldgrenze (Fraunhofer-Abstand)}
+
+Die Grenze zwischen Nah- und Fernfeld (Fraunhofer-Abstand) ist durch den
+Abstand $R_F$ definiert, ab dem die Phasenverzögerung über die Apertur
+kleiner als $\lambda/8$ ist.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Modus & Apertur & $R_F$ \\
+\midrule
+$N$ Punkt-Quellen & $(N-1)\,d$ & $2(N-1)^2 d^2 / \lambda$ \\
+Endliche Dipol ($L_\lambda$) & $L = L_\lambda\lambda$ & $2 L_\lambda^2\,\lambda$ \\
+Unendlicher Dipol & --- & $\infty$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Zeitgemittelte Darstellung und Normierung}
+
+\subsection{Exponentiell gleitender Mittelwert}
+
+Die zeitgemittelte Intensität $\langle E_z^2\rangle$ wird für jeden
+Gitterpunkt $k$ durch einen exponentiell gewichteten gleitenden Mittelwert
+(EMA) berechnet:
+\[
+  \langle E_z^2\rangle_k^{(n)} =
+    (1 - \alpha)\,\langle E_z^2\rangle_k^{(n-1)} + \alpha\,E_{z,k}^2,
+\]
+mit Zerfallsrate $\alpha = 0{,}05$ (entspricht einer Zeitkonstante von
+$\approx 20$ Frames).
+
+\subsection{Geometrische Kompensation ($\sqrt{r}$-Normierung)}
+
+Da zylindrische Wellen mit $1/\sqrt{r}$ in der Amplitude abfallen, wird zur
+besseren Sichtbarkeit des Fernfeldes eine $\sqrt{r}$-Kompensation angewandt:
+\[
+  \tilde{E}_k = \operatorname{sgn}(E_{z,k})\,\sqrt{\langle E_z^2\rangle_k}\,
+                \sqrt{\frac{r_k}{\lambda}},
+\]
+wobei $r_k = \sqrt{x_k^2 + y_k^2}$ der Abstand vom Zentroid der Quellanordnung ist.
+
+\subsection{Farbdarstellung}
+
+Die Farbkodierung erfolgt über die RdBu-Colormap nach
+\[
+  v = \tanh\!\bigl(s\,\tilde{E}_k\bigr), \quad
+  s = \frac{1}{4\,\sqrt{\langle\langle E_z^2\rangle\rangle_{\text{Raum}}} + \varepsilon},
+\]
+wobei $\langle\cdot\rangle_{\text{Raum}}$ das räumliche Mittel über alle
+Gitterpunkte und $\varepsilon = 10^{-30}$ eine Regularisierung bezeichnet.
+Der $\tanh$-Sättigungsterm verhindert Übersteuerung bei starken Quellen.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Intensitätsplot (Beugungsmuster)}
+
+Am rechten Rand des Feldes wird die Intensität entlang des Schirms bei
+$x = x_{\text{screen}}$ berechnet.  Der Schirm kann per Maus verschoben werden.
+Die akkumulierte Intensität $I(y) = \langle E_z^2(x_{\text{screen}}, y)\rangle$
+wird als horizontales Profil dargestellt.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Übersicht der Parameter}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Symbol & Bedeutung & Typischer Bereich \\
+\midrule
+$f_0$ & Grundfrequenz & $\mu\text{Hz} \ldots \text{THz}$ \\
+$\lambda = c/f_0$ & Vakuumwellenlänge & entsprechend \\
+$N$ & Anzahl Punkt-Quellen & $1 \ldots 100$ \\
+$d$ & Quellenabstand & einstellbar \\
+$A_n$ & Amplitude der $n$-ten Quelle & $0 \ldots 2\,A_0$ \\
+$f_{\text{mul},n}$ & Frequenzmultiplikator & $0 \ldots 2$ \\
+$\varphi_n$ & Phasenoffset & $-2\pi \ldots +2\pi$ \\
+$L_\lambda$ & Dipollänge in $\lambda$ & $0{,}125 \ldots 100$ \\
+$\alpha$ & EMA-Zerfallsrate & $0{,}05$ (fest) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
