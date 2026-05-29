@@ -21,7 +21,7 @@
   --red:        #ff7070;
   --radius:     12px;
   --radius-sm:  8px;
-  --sidebar-w:  275px;
+  --sidebar-w:  315px;
 }
 body.light {
   --bg:         #f5f6fa;
@@ -219,6 +219,33 @@ input[type=range] {
   -webkit-appearance: none; width: 100%; height: 2px;
   background: var(--border); outline: none; border-radius: 999px; cursor: pointer;
 }
+/* ── Slider + step-controls wrapper ── */
+.sl-wrap { display: flex; align-items: center; gap: 5px; }
+.sl-wrap > input[type=range] { flex: 2; min-width: 0; width: auto !important; }
+.sl-controls { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sl-numbox {
+  box-sizing: border-box; height: 19px;
+  font-family: 'DM Mono', monospace; font-size: 11px; text-align: right;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-bright); padding: 0 3px; outline: none;
+  -moz-appearance: textfield; vertical-align: baseline;
+}
+.sl-val-suffix {
+  font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim);
+}
+.sl-numbox::-webkit-inner-spin-button,
+.sl-numbox::-webkit-outer-spin-button { display: none; }
+.sl-numbox:focus { border-color: var(--gold); }
+.sl-btns { display: flex; gap: 1px; }
+.sl-btn {
+  flex: 1; height: 19px; min-width: 0; padding: 0;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  user-select: none; -webkit-user-select: none;
+}
+.sl-btn:hover { color: var(--text-bright); border-color: var(--text-dim); }
+.sl-btn:active { background: var(--border); }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
   border: 2px solid currentColor; background: var(--bg); cursor: pointer;
@@ -271,8 +298,8 @@ select.src-select:focus { border-color: var(--text-dim); }
 .bottom-presets { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .preset-drop { width: 100%; }
 .bstat { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; }
-.bstat-key { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: .04em; color: var(--text-dim); white-space: nowrap; }
-.bstat-val { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-bright); white-space: nowrap; }
+.bstat-key { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: .04em; color: var(--text-dim); white-space: nowrap; }
+.bstat-val { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text-bright); white-space: nowrap; }
 
 /* ── Canvas area ─────────────────────────────────────────────────── */
 .canvas-area { flex: 1; min-width: 0; min-height: 0; background: var(--bg); display: flex; flex-direction: column; }
@@ -433,7 +460,7 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 /* ── Mobile landscape: full-screen canvas, collapsible sidebar ───── */
 
 @media (max-width: 900px) and (orientation: landscape) {
-  :root { --sidebar-w: 250px; }
+  :root { --sidebar-w: 285px; }
 
   /* Hide header for more vertical space */
   header { display: none; }
@@ -655,23 +682,21 @@ self.onmessage = function(ev) {
     <div class="sidebar-content">
 
     <div class="sb-group">
-      <div class="sb-label">Quellen</div>
+      <div class="sb-label">Quellen Array</div>
       <select class="src-select" id="sel-mode" style="margin-bottom:8px;width:100%">
         <option value="punkt">Punkt Quellen</option>
         <option value="dipol">Dipolantenne</option>
       </select>
       <div id="sg-punkt">
         <div class="slider-group" id="sg-N" style="color:var(--blue)">
-          <div class="slider-label">
-            <span class="pname">Anzahl (N)</span>
-            <span class="pval" id="val-N">2</span>
+          <div class="slider-label src-formula">
+            <span class="src-name">Anzahl</span><span class="src-eq">N = <span class="pval" id="val-N">2</span></span>
           </div>
           <input type="range" id="sl-N" min="1" max="1000" value="2" step="1">
         </div>
         <div class="slider-group" id="sg-d" style="color:var(--blue)">
-          <div class="slider-info">
-            <span class="si-label">Abstand d =</span>
-            <span class="si-val"><span id="val-d-phys">100</span><select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
+          <div class="slider-label src-formula">
+            <span class="src-name">Quellen Abstand</span><span class="src-eq">d = <span id="val-d-phys">100</span><select class="unit-btn" id="btn-d-unit"><option>pm</option><option>nm</option><option>µm</option><option selected>mm</option><option>m</option><option>km</option></select></span>
           </div>
           <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
         </div>
@@ -681,17 +706,15 @@ self.onmessage = function(ev) {
           <label><input type="checkbox" id="chk-infinite" checked> unendlich</label>
         </div>
         <div class="slider-group" id="sg-L" style="color:var(--blue)">
-          <div class="slider-label">
-            <span class="pname">L/λ</span>
-            <span class="pval" id="val-L">0.50</span>
+          <div class="slider-label src-formula">
+            <span class="src-name">Dipol Länge</span><span class="src-eq">L/λ = <span class="pval" id="val-L">0.50</span></span>
           </div>
           <input type="range" id="sl-L" min="0.125" max="100" step="0.125" value="0.5">
         </div>
       </div>
       <div class="slider-group" style="color:var(--gold)">
-        <div class="slider-info">
-          <span class="si-label">Frequenz f₀ =</span>
-          <span class="si-val"><span id="val-f0-phys">6</span><select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
+        <div class="slider-label src-formula">
+          <span class="src-name">Frequenz</span><span class="src-eq">f₀ = <span id="val-f0-phys">6</span><select class="unit-btn" id="btn-f0-unit"><option>µHz</option><option>mHz</option><option>Hz</option><option>kHz</option><option>MHz</option><option selected>GHz</option><option>THz</option></select></span>
         </div>
         <input type="range" id="sl-f0" min="1" max="1000" value="6" step="1">
       </div>
@@ -699,12 +722,12 @@ self.onmessage = function(ev) {
         <span class="bstat-key">Wellenlänge (λ₀)</span>
         <span class="bstat-val" id="st-lam">—</span>
       </div>
-      <div class="bstat">
+      <div class="bstat" id="st-dlam-row">
         <span class="bstat-key">d / λ</span>
         <span class="bstat-val" id="st-d-lam">—</span>
       </div>
       <div class="bstat" id="st-nd-row" style="display:none">
-        <span class="bstat-key">N · d</span>
+        <span class="bstat-key">Array Länge N · d</span>
         <span class="bstat-val" id="st-nd">—</span>
       </div>
       <div class="bstat">
@@ -722,7 +745,7 @@ self.onmessage = function(ev) {
       <select class="src-select" id="sel-src"></select>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          <span class="src-name">Amplituden</span><span class="src-eq">A = <span class="pval" id="val-src-a">1.0 A₀</span></span>
+          <span class="src-name">Amplitude</span><span class="src-eq">A = <span class="pval" id="val-src-a">1.0 A₀</span></span>
         </div>
         <input type="range" id="sl-src-a" min="0" max="20" step="1" value="10">
       </div>
@@ -969,7 +992,6 @@ canvas.addEventListener('mousemove', e => {
       scrSl.value = screenLam.toFixed(1);
       document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
     }
-    screenAcc.fill(0);
   } else {
     canvas.style.cursor = Math.abs(mx - xScr) < 10 ? 'ew-resize' : '';
   }
@@ -1041,7 +1063,6 @@ canvas.addEventListener('touchmove', e => {
     scrSl.value = screenLam.toFixed(1);
     document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
   }
-  screenAcc.fill(0);
   e.preventDefault();
 }, { passive: false });
 
@@ -2028,28 +2049,26 @@ function syncRows() {
   slSrcA.value = Math.round(s.amp  * 10);
   slSrcF.value = Math.round(s.fmul * 10);
   slSrcP.value = Math.round(s.phase / Math.PI * 5);
-  vlSrcA.textContent = (slSrcA.value / 10).toFixed(1) + ' A₀';
-  vlSrcF.textContent = (slSrcF.value / 10).toFixed(1) + ' f₀';
-  const phFrac = slSrcP.value * 0.2;
-  vlSrcP.textContent = (phFrac >= 0 ? '+' : '−') + Math.abs(phFrac).toFixed(1) + 'π';
+  document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
+  document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
+  document.getElementById('val-src-p').value = +(slSrcP.value * 0.2).toFixed(1);
   screenAcc.fill(0);
 }
 
 selSrc.addEventListener('change', () => { selectedSrc = Number(selSrc.value); syncRows(); });
 slSrcA.addEventListener('input', () => {
   srcs[selectedSrc].amp  = slSrcA.value / 10;
-  vlSrcA.textContent = (slSrcA.value / 10).toFixed(1) + ' A₀';
+  document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
   screenAcc.fill(0); acc2D.fill(0);
 });
 slSrcF.addEventListener('input', () => {
   srcs[selectedSrc].fmul = slSrcF.value / 10;
-  vlSrcF.textContent = (slSrcF.value / 10).toFixed(1) + ' f₀';
+  document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
   screenAcc.fill(0); acc2D.fill(0);
 });
 slSrcP.addEventListener('input', () => {
   srcs[selectedSrc].phase = slSrcP.value * Math.PI / 5;
-  const phFrac = slSrcP.value * 0.2;
-  vlSrcP.textContent = (phFrac >= 0 ? '+' : '−') + Math.abs(phFrac).toFixed(1) + 'π';
+  document.getElementById('val-src-p').value = +(slSrcP.value * 0.2).toFixed(1);
   screenAcc.fill(0); acc2D.fill(0);
 });
 
@@ -2059,7 +2078,7 @@ function readGlobals() {
 
   recompute();
 
-  document.getElementById('val-N').textContent = newN;
+  document.getElementById('val-N').value = newN;
   updateDDisplay();
 }
 document.getElementById('sl-N').addEventListener('input', () => {
@@ -2078,7 +2097,7 @@ function updateF0Display() {
   const v = f0 / u.s;
   document.getElementById('sl-f0').value = Math.round(v);
   document.getElementById('btn-f0-unit').value = u.l;
-  document.getElementById('val-f0-phys').textContent = Math.round(v);
+  document.getElementById('val-f0-phys').value = Math.round(v);
   const lamEl = document.getElementById('val-f0-lam');
   if (lamEl) lamEl.textContent = lamStr();
 }
@@ -2125,7 +2144,9 @@ function updateDDisplay() {
   const v = d_m / u.s;
   document.getElementById('sl-d').value = Math.round(v);
   document.getElementById('btn-d-unit').value = u.l;
-  document.getElementById('val-d-phys').textContent = Math.round(v);
+  document.getElementById('val-d-phys').value = Math.round(v);
+  const stDLamRow = document.getElementById('st-dlam-row');
+  if (stDLamRow) stDLamRow.style.display = N_SRC <= 1 ? 'none' : '';
   const stDLam = document.getElementById('st-d-lam');
   if (stDLam) stDLam.textContent = d_lam.toFixed(2) + '   ';
   const ndRow = document.getElementById('st-nd-row');
@@ -2134,7 +2155,7 @@ function updateDDisplay() {
   if (ndRow) ndRow.style.display = showNd ? '' : 'none';
   if (ndEl && showNd) {
     const DIST_U = [{l:'km',s:1e3},{l:'m',s:1},{l:'cm',s:1e-2},{l:'mm',s:1e-3},{l:'µm',s:1e-6},{l:'nm',s:1e-9}];
-    const nd_m = N_SRC * d_m;
+    const nd_m = (N_SRC - 1) * d_m;
     const uNd = DIST_U.find(u => nd_m / u.s >= 0.5) || DIST_U[DIST_U.length - 1];
     const puNd = uNd.l.length < 2 ? uNd.l + ' ' : uNd.l;
     ndEl.textContent = (nd_m / uNd.s).toFixed(2) + ' ' + puNd;
@@ -2184,7 +2205,7 @@ function applyDipolControls() {
   dipolInfinite = document.getElementById('chk-infinite').checked;
   L_lam = Number(document.getElementById('sl-L').value);
   document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
-  document.getElementById('val-L').textContent = L_lam.toFixed(3).replace(/\.?0+$/, '');
+  document.getElementById('val-L').value = +L_lam.toFixed(3);
   screenAcc.fill(0);
   wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
   recompute();
@@ -2370,6 +2391,106 @@ function workerInit() {
   wsActive = true;
   wsSendParams();
 }
+
+// ── Slider step-controls: numbox in label row + «‹›» button group ────────────
+// Each spec: { id, valId, suffix, toDisplay(raw)→display, toRaw(display)→raw,
+//              dispMin, dispMax, dispStep, width }
+function initSliderControls(specs) {
+  specs.forEach(({id, valId, suffix, toDisplay, toRaw, dispMin, dispMax, dispStep, width}) => {
+    const sl = document.getElementById(id);
+    if (!sl) return;
+    const slMin = parseFloat(sl.min), slMax = parseFloat(sl.max);
+    const slStep = parseFloat(sl.step) || 1;
+    const fastStep = Math.max(slStep, Math.round((slMax - slMin) * 0.1 / slStep) * slStep);
+
+    // 1. Numbox replaces the existing value-display element in the label row
+    const nb = document.createElement('input');
+    nb.type = 'number'; nb.className = 'sl-numbox';
+    nb.min = dispMin; nb.max = dispMax; nb.step = dispStep;
+    nb.style.width = width;
+    nb.value = toDisplay(parseFloat(sl.value));
+    if (valId) {
+      const valEl = document.getElementById(valId);
+      if (valEl) {
+        nb.id = valId;   // take over same ID so existing setters still work
+        valEl.replaceWith(nb);
+        if (suffix) {
+          const sfx = document.createElement('span');
+          sfx.className = 'sl-val-suffix';
+          sfx.textContent = ' ' + suffix;
+          nb.after(sfx);
+        }
+      }
+    }
+
+    // 2. Wrap slider + button-group in flex row (no numbox here)
+    const wrap = document.createElement('div');
+    wrap.className = 'sl-wrap';
+    sl.parentNode.insertBefore(wrap, sl);
+    wrap.appendChild(sl);
+
+    const ctrl = document.createElement('div');
+    ctrl.className = 'sl-controls';
+    const btns = document.createElement('div');
+    btns.className = 'sl-btns';
+    [[-fastStep,'«','Schnell zurück'],[-slStep,'‹','Schritt zurück'],
+     [ slStep,  '›','Schritt vor'],   [ fastStep,'»','Schnell vor']
+    ].forEach(([delta, lbl, title]) => {
+      const btn = document.createElement('button');
+      btn.className = 'sl-btn'; btn.textContent = lbl; btn.title = title;
+      btn.addEventListener('click', () => {
+        const snapped = Math.round(
+          Math.min(slMax, Math.max(slMin, parseFloat(sl.value) + delta)) / slStep) * slStep;
+        sl.value = snapped;
+        nb.value = toDisplay(snapped);
+        sl.dispatchEvent(new Event('input', {bubbles: true}));
+      });
+      btns.appendChild(btn);
+    });
+    ctrl.appendChild(btns);
+    wrap.appendChild(ctrl);
+
+    // 3. numbox → slider
+    function applyNumbox() {
+      let dv = parseFloat(nb.value);
+      if (isNaN(dv)) { nb.value = toDisplay(parseFloat(sl.value)); return; }
+      dv = Math.min(parseFloat(dispMax), Math.max(parseFloat(dispMin), dv));
+      dv = Math.round(dv / parseFloat(dispStep)) * parseFloat(dispStep);
+      const raw = Math.min(slMax, Math.max(slMin, toRaw(dv)));
+      sl.value = raw;
+      nb.value = toDisplay(parseFloat(sl.value));
+      sl.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+    nb.addEventListener('change', applyNumbox);
+    nb.addEventListener('keydown', e => { if (e.key === 'Enter') { applyNumbox(); nb.blur(); } });
+
+    // 4. slider → numbox (drag / external changes)
+    sl.addEventListener('input', () => { nb.value = toDisplay(parseFloat(sl.value)); });
+  });
+}
+initSliderControls([
+  { id:'sl-N',     valId:'val-N',       suffix:null, width:'46px',
+    toDisplay: v => Math.round(v),  toRaw: v => v,
+    dispMin:1, dispMax:1000, dispStep:1 },
+  { id:'sl-d',     valId:'val-d-phys',  suffix:null, width:'46px',
+    toDisplay: v => Math.round(v),  toRaw: v => v,
+    dispMin:1, dispMax:1000, dispStep:1 },
+  { id:'sl-f0',    valId:'val-f0-phys', suffix:null, width:'46px',
+    toDisplay: v => Math.round(v),  toRaw: v => v,
+    dispMin:1, dispMax:1000, dispStep:1 },
+  { id:'sl-L',     valId:'val-L',       suffix:null, width:'52px',
+    toDisplay: v => +parseFloat(v).toFixed(3),  toRaw: v => v,
+    dispMin:0.125, dispMax:100, dispStep:0.125 },
+  { id:'sl-src-a', valId:'val-src-a',   suffix:'A₀', width:'32px',
+    toDisplay: v => +(v/10).toFixed(1),  toRaw: v => Math.round(v*10),
+    dispMin:0, dispMax:2, dispStep:0.1 },
+  { id:'sl-src-f', valId:'val-src-f',   suffix:'f₀', width:'32px',
+    toDisplay: v => +(v/10).toFixed(1),  toRaw: v => Math.round(v*10),
+    dispMin:0, dispMax:2, dispStep:0.1 },
+  { id:'sl-src-p', valId:'val-src-p',   suffix:'π',  width:'38px',
+    toDisplay: v => +(v*0.2).toFixed(1),  toRaw: v => Math.round(v/0.2),
+    dispMin:-2, dispMax:2, dispStep:0.2 },
+]);
 
 document.body.classList.add('light');
 buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisplay(); syncLoadBarSpeed(); workerInit();
