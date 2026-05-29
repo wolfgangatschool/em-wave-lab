@@ -436,7 +436,20 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
 /* Collapsed strip: center the button, hide all content */
 .sidebar.sidebar-hidden .sidebar-header { justify-content: center; }
 .sidebar.sidebar-hidden .sidebar-title  { display: none; }
-.sidebar.sidebar-hidden .sidebar-content { visibility: hidden; }
+.sidebar.sidebar-hidden .sidebar-content { display: none; }
+.sb-collapsed-strip {
+  display: none; flex: 1;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.sidebar.sidebar-hidden .sb-collapsed-strip { display: flex; }
+.sb-collapsed-text {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-dim); user-select: none; transition: color .15s;
+}
+.sidebar.sidebar-hidden:hover .sb-collapsed-text { color: var(--text-bright); }
 #btn-sidebar-toggle {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
@@ -683,7 +696,10 @@ self.onmessage = function(ev) {
   <aside class="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">Einstellungen</span>
-      <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
+      <button id="btn-sidebar-toggle" title="Einstellungen">‹</button>
+    </div>
+    <div class="sb-collapsed-strip" id="sb-collapsed-strip">
+      <span class="sb-collapsed-text">Einstellungen</span>
     </div>
     <div class="sidebar-content">
 
@@ -2515,15 +2531,20 @@ buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisp
 { const b = document.getElementById('btn-lock'); b.textContent = 'X=Y'; b.classList.add('active'); }
 
 // Sidebar toggle — mobile: slide-in overlay; desktop: collapse sidebar width
-document.getElementById('btn-sidebar-toggle').addEventListener('click', () => {
+function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
+  const btn     = document.getElementById('btn-sidebar-toggle');
   const isMobL  = window.innerWidth <= 900 && window.matchMedia('(orientation: landscape)').matches;
   if (isMobL) {
     sidebar.classList.toggle('mobile-open');
   } else {
+    const hiding = !sidebar.classList.contains('sidebar-hidden');
     sidebar.classList.toggle('sidebar-hidden');
+    btn.textContent = hiding ? '›' : '‹';
   }
-});
+}
+document.getElementById('btn-sidebar-toggle').addEventListener('click', toggleSidebar);
+document.getElementById('sb-collapsed-strip').addEventListener('click', toggleSidebar);
 // Close sidebar when tapping outside it on mobile
 document.addEventListener('touchstart', e => {
   const sidebar = document.querySelector('.sidebar');
