@@ -60,16 +60,14 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   display: flex; align-items: center; flex-shrink: 0;
   padding: 4px 0;
 }
-#btn-play {
-  position: absolute; top: 0; z-index: 1;
-}
 #btn-timeavg {
-  position: absolute; z-index: 10;
   background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 12px;
   height: 28px; padding: 0 8px;
   cursor: pointer; opacity: 0.6; letter-spacing: 0.02em;
   display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  /* width and margin-left set by JS to align with intensity plot axes */
 }
 #btn-timeavg:hover { opacity: 1; }
 #btn-timeavg.active {
@@ -98,8 +96,6 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   flex-shrink: 0;
   display: flex; align-items: center;
   overflow: visible;
-  margin-left: 8px;
-  width: 20%;
 }
 .tempo-area {
   flex: 1; min-width: 0;
@@ -339,8 +335,36 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   border-radius: 50%; background: var(--text-dim); border: none;
 }
 
+/* ── Sidebar toggle — always visible ─────────────────────────────── */
+#btn-sidebar-toggle {
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text-dim); font-size: 15px;
+  width: 28px; height: 28px; cursor: pointer; opacity: 0.8;
+  margin-right: 0;
+}
+#btn-sidebar-toggle:hover { opacity: 1; }
+
+/* Desktop sidebar: collapsible via sidebar-hidden class */
+.sidebar {
+  transition: width 0.22s ease;
+  overflow-x: hidden;
+}
+.sidebar.sidebar-hidden { width: 0; border-right: none; }
+
+/* ── Field group (over 2D plot) ──────────────────────────────────── */
+.field-group {
+  display: flex; flex-direction: column; gap: 3px;
+  flex-shrink: 0;
+  /* width and margin-left set by JS each frame */
+}
+.field-top-row {
+  display: flex; align-items: center; gap: 4px;
+}
+#btn-play { flex-shrink: 0; }
+.load-area { position: absolute; z-index: 6; }
 /* ── Mobile landscape: full-screen canvas, collapsible sidebar ───── */
-#btn-sidebar-toggle { display: none; }
 
 @media (max-width: 900px) and (orientation: landscape) {
   :root { --sidebar-w: 200px; }
@@ -366,26 +390,16 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   /* Lift slider away from phone bottom edge */
   .canvas-area { padding-bottom: max(18px, env(safe-area-inset-bottom, 18px)); }
 
-  /* Sidebar toggle — show as flex item in canvas-top-bar, left of play button */
-  #btn-sidebar-toggle {
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 4px; color: var(--text-dim); font-size: 15px;
-    width: 26px; height: 26px; cursor: pointer; opacity: 0.8;
-    margin-left: 4px;
-  }
-  #btn-sidebar-toggle:hover { opacity: 1; }
+  /* Sidebar toggle — smaller on mobile */
+  #btn-sidebar-toggle { width: 26px; height: 26px; font-size: 14px; margin-left: 4px; }
 
-  /* Play button: sized to match sidebar toggle */
+  /* Play button — smaller on mobile */
   #btn-play { width: 26px; height: 26px; font-size: 13px; }
   #btn-timeavg { font-size: 11px; height: 24px; }
 
-  /* Lock button: same height as play button on mobile */
-  #btn-lock { height: 26px; padding: 0 7px; font-size: 12px; }
+  /* Lock button: match btn-timeavg size on mobile */
+  #btn-lock { height: 24px; padding: 0 7px; font-size: 11px; }
 
-  /* ctrl-area: tighter gap on mobile */
-  .ctrl-area { gap: 3px; }
 }
 
 /* ── Portrait: rotate prompt ─────────────────────────────────────── */
@@ -693,20 +707,25 @@ self.onmessage = function(ev) {
   <div class="canvas-area">
     <div class="canvas-top-bar">
       <button id="btn-sidebar-toggle" title="Einstellungen">☰</button>
-      <div class="load-area" id="load-area">
-        <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
-        <div class="load-text" id="load-text">reloading…</div>
-        <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+      <div class="field-group" id="field-group">
+        <div class="field-top-row">
+          <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
+          <div class="tempo-area">
+            <span class="tempo-val" id="val-tempo-top"></span>
+            <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
+          </div>
+        </div>
       </div>
       <div class="ctrl-area" id="ctrl-area">
-        <div class="tempo-area">
-          <span class="tempo-val" id="val-tempo-top"></span>
-          <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
-        </div>
+        <button id="btn-timeavg">Zeitgemittelt</button>
       </div>
     </div>
     <div class="canvas-wrap">
       <canvas id="field"></canvas>
+      <div class="load-area" id="load-area">
+        <div class="load-text" id="load-text">reloading…</div>
+        <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+      </div>
       <button id="btn-lock" title="Skalierung koppeln">X≠Y</button>
       <div id="y-slider-strip">
         <span class="ax-val" id="val-yl">4 λ</span>
@@ -716,7 +735,6 @@ self.onmessage = function(ev) {
         <input type="range" id="sl-xl1" min="1" max="100" value="12" step="1">
         <span class="ax-val" id="val-xl1">12 λ</span>
       </div>
-      <button id="btn-timeavg">Zeitgemittelt</button>
     </div>
   </div>
 
@@ -1352,48 +1370,38 @@ function draw() {
   const fy0  = XAXIS_TOP_H;
   _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
   updateAxisSliders();
-  // Align progress bar with field columns; ctrl-area with intensity panel columns
-  { const la = document.getElementById('load-area');
-    const ca = document.getElementById('ctrl-area');
-    const wrap = document.querySelector('.load-bar-wrap');
-    if (la && wrap) {
-      const cl = canvas.getBoundingClientRect().left;
-      const lr = la.getBoundingClientRect();
-      const desktopLeft = Math.max(0, cl + fx0 - lr.left);
-      if (isMob) {
-        // On mobile the play button sits absolute at left≈4px inside load-area.
-        // Push bar start past the button's right edge so there is a gap between them.
-        const btnPlay2 = document.getElementById('btn-play');
-        const btnEnd   = btnPlay2 ? btnPlay2.offsetLeft + btnPlay2.offsetWidth + 8 : 0;
-        wrap.style.marginLeft = Math.max(btnEnd, desktopLeft).toFixed(0) + 'px';
-      } else {
-        wrap.style.marginLeft = desktopLeft.toFixed(0) + 'px';
-      }
-      wrap.style.marginRight = '0px';
-      // Push bar down so its centre aligns with play button centre and c-slider track.
-      // marginTop = (btnHeight - barHeight) / 2 is the exact fixed point where
-      // bar centre == button centre regardless of canvas-top-bar total height.
-      const btnPlay2 = document.getElementById('btn-play');
-      if (btnPlay2) {
-        wrap.style.marginTop = Math.round((btnPlay2.offsetHeight - 3) / 2) + 'px';
-      }
+  // Align field-group over 2D plot; ctrl-area over intensity panel
+  { const ca          = document.getElementById('ctrl-area');
+    const fieldGroup  = document.getElementById('field-group');
+    const sidebarBtn  = document.getElementById('btn-sidebar-toggle');
+    const wrap        = document.querySelector('.load-bar-wrap');
+    const cl          = canvas.getBoundingClientRect().left;
+    if (fieldGroup && sidebarBtn) {
+      // Centre sidebar button in the fx0-wide space left of the play button
+      const btnW      = sidebarBtn.offsetWidth;
+      const sidebarM  = Math.max(0, Math.round((fx0 - btnW) / 2));
+      sidebarBtn.style.marginLeft = sidebarM + 'px';
+      // field-group left edge = sidebarM + btnW + fieldGap  →  should equal fx0
+      const fieldGap  = Math.max(0, fx0 - sidebarM - btnW);
+      fieldGroup.style.marginLeft = fieldGap + 'px';
+      fieldGroup.style.width      = fw.toFixed(0) + 'px';
     }
     if (ca) ca.style.width = SCREEN_W + 'px';
-    // Align play button: on desktop left edge = y-slider left; on mobile anchor to load-area start
-    const btnPlay = document.getElementById('btn-play');
-    const strip   = document.getElementById('y-slider-strip');
-    if (btnPlay && strip && la) {
-      const sl = strip.getBoundingClientRect();
-      const ll = la.getBoundingClientRect();
-      const desiredLeft = sl.left - ll.left;
-      btnPlay.style.left = (isMob ? Math.max(4, desiredLeft) : Math.max(0, desiredLeft)).toFixed(0) + 'px';
+    // Position progress bar on the top edge of the 2D field
+    const la = document.getElementById('load-area');
+    if (la) {
+      la.style.left  = fx0 + 'px';
+      la.style.width = fw  + 'px';
+      la.style.top   = (fy0 - 1) + 'px';  // straddle the field top edge
     }
-    const btnTa = document.getElementById('btn-timeavg');
-    if (btnTa) {
-      const SX = FIELD_W + 1;
-      btnTa.style.left = (SX + SCREEN_W / 2).toFixed(0) + 'px';
-      btnTa.style.transform = 'translateX(-50%)';
-      btnTa.style.bottom = (XAXIS2_H / 2 - btnTa.offsetHeight / 2).toFixed(0) + 'px';
+    if (wrap) { wrap.style.marginLeft = '0'; wrap.style.marginRight = '0'; wrap.style.marginTop = '0'; }
+    // Size btn-timeavg to span from the intensity y/λ axis to the mm axis
+    const btnTa  = document.getElementById('btn-timeavg');
+    if (btnTa && ca) {
+      const AXIS_W  = Math.min(isMob ? 36 : 46, Math.floor(SCREEN_W * 0.28));
+      const RIGHT_W = SCREEN_W >= 150 ? (isMob ? 34 : 44) : 0;
+      btnTa.style.marginLeft = AXIS_W + 'px';
+      btnTa.style.width      = (SCREEN_W - AXIS_W - RIGHT_W) + 'px';
     }
   }
 
@@ -2074,9 +2082,15 @@ buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisp
 // reflect initial lock state on button
 { const b = document.getElementById('btn-lock'); b.textContent = 'X=Y'; b.classList.add('active'); }
 
-// Sidebar toggle for mobile landscape
+// Sidebar toggle — mobile: slide-in overlay; desktop: collapse sidebar width
 document.getElementById('btn-sidebar-toggle').addEventListener('click', () => {
-  document.querySelector('.sidebar').classList.toggle('mobile-open');
+  const sidebar = document.querySelector('.sidebar');
+  const isMobL  = window.innerWidth <= 900 && window.matchMedia('(orientation: landscape)').matches;
+  if (isMobL) {
+    sidebar.classList.toggle('mobile-open');
+  } else {
+    sidebar.classList.toggle('sidebar-hidden');
+  }
 });
 // Close sidebar when tapping outside it on mobile
 document.addEventListener('touchstart', e => {
