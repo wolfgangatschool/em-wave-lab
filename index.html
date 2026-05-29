@@ -54,9 +54,7 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .header-title {
   font-family: 'DM Mono', monospace; font-size: 24px;
   font-weight: 600; color: var(--text-bright); letter-spacing: .08em;
-  flex-shrink: 0;
-  /* title + gap(8) = sidebar-w → title = sidebar-w - 14(left-pad) - 8(gap) = sidebar-w - 22 */
-  min-width: calc(var(--sidebar-w) - 22px);
+  flex-shrink: 0; white-space: nowrap; margin-right: 16px;
 }
 .header-controls {
   flex: 1; min-width: 0;
@@ -695,8 +693,8 @@ self.onmessage = function(ev) {
         <input type="range" id="sl-speed" min="1" max="50" value="5" step="1">
       </div>
       <div class="header-right">
-        <button id="btn-fraunhofer">Zentriere auf Fernfeldgrenze</button>
-        <button id="btn-timeavg">Normiert und zeitgemittelt</button>
+        <button id="btn-fraunhofer">Fernfeldgrenze</button>
+        <button id="btn-timeavg">Normierter Zeitmittelwert</button>
       </div>
     </div>
     <button class="theme-toggle" id="theme-toggle" title="Theme wechseln">☾</button>
@@ -1630,25 +1628,9 @@ function draw() {
   const fy0  = XAXIS_TOP_H;
   _layoutFx0 = fx0; _layoutFw = fw; _layoutFy0 = fy0; _layoutFh = fh;
   updateAxisSliders();
-  // Size c-slider to end at the midpoint of the 2D field
-  // header-speed starts at: left-pad(14) + title(sidebar_w-22) + gap(8) + play(28) + gap(8) = sidebar_w+36
-  // Size c-slider to end at ~midpoint of 2D field, but capped so header-right
-  // always has at least 580px for the two action buttons.
+  // c-slider fills all available space via CSS flex: 1; no JS cap needed.
   { const hdrSpeed = document.querySelector('.header-speed');
-    if (hdrSpeed && !isMob) {
-      const sidebar   = document.querySelector('.sidebar');
-      const sbClosed  = sidebar?.classList.contains('sidebar-hidden');
-      const sbPx      = sbClosed ? 36 : (parseInt(
-        getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 315);
-      // estimated header-controls width = viewW − sbPx − 66 (title-min + play + theme + gaps)
-      const hcEst     = (window.innerWidth || W + sbPx) - sbPx - 66;
-      const MIN_RIGHT = 580;   // minimum px for both right buttons
-      const speedMax  = Math.max(60, hcEst - MIN_RIGHT - 8);
-      const speedIdeal = Math.max(60, Math.round(fx0 + fw / 2 - 36));
-      hdrSpeed.style.maxWidth = Math.min(speedIdeal, speedMax) + 'px';
-    } else if (hdrSpeed && isMob) {
-      hdrSpeed.style.maxWidth = '';  // let CSS flex handle it on mobile
-    }
+    if (hdrSpeed) hdrSpeed.style.maxWidth = '';
   }
 
   // Position progress bar overlay on the top edge of the 2D field
@@ -2059,7 +2041,7 @@ function updateStats() {
   const btnFr = document.getElementById('btn-fraunhofer');
   if (btnFr) {
     btnFr.disabled = !(Number.isFinite(rFF) && rFF > 0);
-    btnFr.textContent = rFF > 0 ? 'Zentriere auf Fernfeldgrenze (' + rFFtext + ')' : 'Zentriere auf Fernfeldgrenze';
+    btnFr.textContent = rFF > 0 ? 'Fernfeldgrenze (' + rFFtext + ')' : 'Fernfeldgrenze';
   }
   // mirror to mobile sidebar
   const _m = s => { const el = document.getElementById(s + '-m'); if (el) el.textContent = document.getElementById(s).textContent; };
