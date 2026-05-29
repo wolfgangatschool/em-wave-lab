@@ -2210,9 +2210,31 @@ function draw() {
   }
 
   if (showBField && wsActive && wsLatestBx && wsLatestBy) {
-    const slNX = activeEngineId === 'fdtd' ? fdtdEngine.ANX : NX;
-    const slNY = activeEngineId === 'fdtd' ? fdtdEngine.ANY : NY;
-    drawStreamlines(ctx, wsLatestBx, wsLatestBy, slNX, slNY, fx0, fy0, fw, fh);
+    if (activeEngineId === 'fdtd' && fdtdEngine) {
+      // Crop Bx/By to the visible viewport portion, matching the E-field 9-arg drawImage crop
+      const fYH  = fdtdEngine.YL_HALF, fXL = fdtdEngine.XL_LAM;
+      const fNXd = fdtdEngine.ANX,     fNYd = fdtdEngine.ANY;
+      const visYhalf = Math.min(ylHalf, fYH);
+      const visXmax  = Math.min(XL1, fXL);
+      // iy range in full field (iy=0=bottom=y=-fYH)
+      const iy0 = Math.round((fYH - visYhalf) / (2 * fYH) * (fNYd - 1));
+      const iy1 = Math.round((fYH + visYhalf) / (2 * fYH) * (fNYd - 1));
+      const ix1 = Math.round(visXmax / fXL * (fNXd - 1));
+      const subNX = ix1 + 1, subNY = iy1 - iy0 + 1;
+      const subBx = new Float32Array(subNX * subNY);
+      const subBy = new Float32Array(subNX * subNY);
+      for (let ix = 0; ix < subNX; ix++)
+        for (let iy = iy0; iy <= iy1; iy++) {
+          const d = ix * subNY + (iy - iy0);
+          subBx[d] = wsLatestBx[ix * fNYd + iy];
+          subBy[d] = wsLatestBy[ix * fNYd + iy];
+        }
+      const ddx = fx0, ddy = yPx(visYhalf);
+      const ddw = visXmax / (XL1 - XL0) * fw, ddh = yPx(-visYhalf) - ddy;
+      drawStreamlines(ctx, subBx, subBy, subNX, subNY, ddx, ddy, ddw, ddh);
+    } else {
+      drawStreamlines(ctx, wsLatestBx, wsLatestBy, NX, NY, fx0, fy0, fw, fh);
+    }
   }
 
   ctx.font = fTickB;
