@@ -203,8 +203,9 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
 .slider-label.src-formula {
   font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px;
-  color: var(--text-bright); justify-content: flex-start; gap: 4px;
+  color: var(--text-bright); justify-content: space-between; gap: 4px;
 }
+.slider-label.src-formula .src-eq { white-space: nowrap; }
 .slider-info {
   display: grid; grid-template-columns: auto auto;
   column-gap: 6px; row-gap: 1px; margin-top: 4px;
@@ -721,19 +722,19 @@ self.onmessage = function(ev) {
       <select class="src-select" id="sel-src"></select>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          Amplituden A = <span class="pval" id="val-src-a">1.0 A₀</span>
+          <span class="src-name">Amplituden</span><span class="src-eq">A = <span class="pval" id="val-src-a">1.0 A₀</span></span>
         </div>
         <input type="range" id="sl-src-a" min="0" max="20" step="1" value="10">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          Frequenz f = <span class="pval" id="val-src-f">1.0 f₀</span>
+          <span class="src-name">Frequenz</span><span class="src-eq">f = <span class="pval" id="val-src-f">1.0 f₀</span></span>
         </div>
         <input type="range" id="sl-src-f" min="0" max="20" step="1" value="10">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          Phase φ = φ₀ <span class="pval" id="val-src-p">+0.0π</span>
+          <span class="src-name">Phase</span><span class="src-eq">φ = φ₀ <span class="pval" id="val-src-p">+0.0π</span></span>
         </div>
         <input type="range" id="sl-src-p" min="-10" max="10" step="1" value="0">
       </div>
