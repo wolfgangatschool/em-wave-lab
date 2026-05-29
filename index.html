@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EM-Wellen · Feldlinien (Standalone)</title>
+<title>EM-Wave Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500&family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;1,300;1,400&display=swap" rel="stylesheet">
 <style>
@@ -52,8 +52,8 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   padding: 7px 14px;
 }
 .header-title {
-  font-family: 'DM Mono', monospace; font-size: 18px;
-  font-weight: 500; color: var(--text-bright); letter-spacing: .05em;
+  font-family: 'DM Mono', monospace; font-size: 24px;
+  font-weight: 600; color: var(--text-bright); letter-spacing: .08em;
   flex-shrink: 0;
   /* title + gap(8) = sidebar-w → title = sidebar-w - 14(left-pad) - 8(gap) = sidebar-w - 22 */
   min-width: calc(var(--sidebar-w) - 22px);
@@ -139,7 +139,7 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 .tempo-val {
   font: 300 10px 'DM Mono', monospace;
   color: var(--text-dim); letter-spacing: .04em; white-space: nowrap;
-  text-align: center;
+  text-align: center; overflow: hidden;
 }
 
 /* reloading state: static full bar + blinking text */
@@ -489,6 +489,12 @@ canvas#field { display: block; width: 100%; height: 100%; touch-action: none; }
   #btn-play { width: 26px; height: 26px; font-size: 13px; }
   #btn-timeavg { font-size: 11px; }
   #btn-fraunhofer { font-size: 11px; }
+  /* Header: title no longer needs to match sidebar width (sidebar is overlay on mobile) */
+  .header-title { min-width: 0; font-size: 15px; }
+  /* Speed slider: auto-flex, buttons wrap to second row */
+  .header-speed { flex: 1; max-width: 180px; }
+  .header-controls { flex-wrap: wrap; row-gap: 3px; align-items: center; }
+  .header-right { flex: 0 0 100%; justify-content: stretch; }
 
   /* Lock button: match btn-timeavg size on mobile */
   #btn-lock { height: 24px; padding: 0 7px; font-size: 11px; }
@@ -656,7 +662,7 @@ self.onmessage = function(ev) {
 
 <header>
   <div class="header-inner">
-    <div class="header-title">EM-Wellen</div>
+    <div class="header-title">EM-Wave Lab</div>
     <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
     <div class="header-controls">
       <div class="header-speed">
@@ -745,21 +751,21 @@ self.onmessage = function(ev) {
       <select class="src-select" id="sel-src"></select>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          <span class="src-name">Amplitude</span><span class="src-eq">A = <span class="pval" id="val-src-a">1.0 A₀</span></span>
+          <span class="src-name">Amplitude</span><span class="src-eq">A = <span class="pval" id="val-src-a">1.0</span> · A₀</span>
         </div>
-        <input type="range" id="sl-src-a" min="0" max="20" step="1" value="10">
+        <input type="range" id="sl-src-a" min="0" max="100" step="1" value="10">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          <span class="src-name">Frequenz</span><span class="src-eq">f = <span class="pval" id="val-src-f">1.0 f₀</span></span>
+          <span class="src-name">Frequenz</span><span class="src-eq">f = <span class="pval" id="val-src-f">1.0</span> · f₀</span>
         </div>
-        <input type="range" id="sl-src-f" min="0" max="20" step="1" value="10">
+        <input type="range" id="sl-src-f" min="0" max="100" step="1" value="10">
       </div>
       <div class="slider-group" style="color:var(--text-dim)">
         <div class="slider-label src-formula">
-          <span class="src-name">Phase</span><span class="src-eq">φ = φ₀ <span class="pval" id="val-src-p">+0.0π</span></span>
+          <span class="src-name">Phase</span><span class="src-eq">φ = φ₀ <span class="pval" id="val-src-p">+ 0.0</span> · π</span>
         </div>
-        <input type="range" id="sl-src-p" min="-10" max="10" step="1" value="0">
+        <input type="range" id="sl-src-p" min="-24" max="24" step="1" value="0">
       </div>
       <select id="sel-presets" class="preset-btn preset-drop" style="margin-top:6px;width:100%">
         <option value="" disabled selected>Presets…</option>
@@ -1598,12 +1604,22 @@ function draw() {
   updateAxisSliders();
   // Size c-slider to end at the midpoint of the 2D field
   // header-speed starts at: left-pad(14) + title(sidebar_w-22) + gap(8) + play(28) + gap(8) = sidebar_w+36
-  // field midpoint from window left = sidebar_w + fx0 + fw/2
-  // so speed width = fx0 + fw/2 - 36
+  // Size c-slider to end at ~midpoint of 2D field, but capped so header-right
+  // always has at least 580px for the two action buttons.
   { const hdrSpeed = document.querySelector('.header-speed');
-    if (hdrSpeed) {
-      const w = Math.max(60, Math.round(fx0 + fw / 2 - 36));
-      hdrSpeed.style.width = w + 'px';
+    if (hdrSpeed && !isMob) {
+      const sidebar   = document.querySelector('.sidebar');
+      const sbClosed  = sidebar?.classList.contains('sidebar-hidden');
+      const sbPx      = sbClosed ? 36 : (parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')) || 315);
+      // estimated header-controls width = viewW − sbPx − 66 (title-min + play + theme + gaps)
+      const hcEst     = (window.innerWidth || W + sbPx) - sbPx - 66;
+      const MIN_RIGHT = 580;   // minimum px for both right buttons
+      const speedMax  = Math.max(60, hcEst - MIN_RIGHT - 8);
+      const speedIdeal = Math.max(60, Math.round(fx0 + fw / 2 - 36));
+      hdrSpeed.style.width = Math.min(speedIdeal, speedMax) + 'px';
+    } else if (hdrSpeed && isMob) {
+      hdrSpeed.style.width = '';  // let CSS flex handle it on mobile
     }
   }
 
@@ -2048,10 +2064,10 @@ function syncRows() {
   const s = srcs[selectedSrc];
   slSrcA.value = Math.round(s.amp  * 10);
   slSrcF.value = Math.round(s.fmul * 10);
-  slSrcP.value = Math.round(s.phase / Math.PI * 5);
+  slSrcP.value = Math.round(s.phase / Math.PI * 12);
   document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
   document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
-  document.getElementById('val-src-p').value = +(slSrcP.value * 0.2).toFixed(1);
+  { const n = +(slSrcP.value / 12).toFixed(2); document.getElementById('val-src-p').value = (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); }
   screenAcc.fill(0);
 }
 
@@ -2067,8 +2083,8 @@ slSrcF.addEventListener('input', () => {
   screenAcc.fill(0); acc2D.fill(0);
 });
 slSrcP.addEventListener('input', () => {
-  srcs[selectedSrc].phase = slSrcP.value * Math.PI / 5;
-  document.getElementById('val-src-p').value = +(slSrcP.value * 0.2).toFixed(1);
+  srcs[selectedSrc].phase = slSrcP.value * Math.PI / 12;
+  { const n = +(slSrcP.value / 12).toFixed(2); document.getElementById('val-src-p').value = (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); }
   screenAcc.fill(0); acc2D.fill(0);
 });
 
@@ -2394,9 +2410,9 @@ function workerInit() {
 
 // ── Slider step-controls: numbox in label row + «‹›» button group ────────────
 // Each spec: { id, valId, suffix, toDisplay(raw)→display, toRaw(display)→raw,
-//              dispMin, dispMax, dispStep, width }
+//              dispMin, dispMax, dispStep, width, inputType }
 function initSliderControls(specs) {
-  specs.forEach(({id, valId, suffix, toDisplay, toRaw, dispMin, dispMax, dispStep, width}) => {
+  specs.forEach(({id, valId, suffix, toDisplay, toRaw, dispMin, dispMax, dispStep, width, inputType}) => {
     const sl = document.getElementById(id);
     if (!sl) return;
     const slMin = parseFloat(sl.min), slMax = parseFloat(sl.max);
@@ -2405,8 +2421,8 @@ function initSliderControls(specs) {
 
     // 1. Numbox replaces the existing value-display element in the label row
     const nb = document.createElement('input');
-    nb.type = 'number'; nb.className = 'sl-numbox';
-    nb.min = dispMin; nb.max = dispMax; nb.step = dispStep;
+    nb.type = inputType || 'number'; nb.className = 'sl-numbox';
+    if (nb.type === 'number') { nb.min = dispMin; nb.max = dispMax; nb.step = dispStep; }
     nb.style.width = width;
     nb.value = toDisplay(parseFloat(sl.value));
     if (valId) {
@@ -2481,15 +2497,16 @@ initSliderControls([
   { id:'sl-L',     valId:'val-L',       suffix:null, width:'52px',
     toDisplay: v => +parseFloat(v).toFixed(3),  toRaw: v => v,
     dispMin:0.125, dispMax:100, dispStep:0.125 },
-  { id:'sl-src-a', valId:'val-src-a',   suffix:'A₀', width:'32px',
+  { id:'sl-src-a', valId:'val-src-a',   suffix:null, width:'36px',
     toDisplay: v => +(v/10).toFixed(1),  toRaw: v => Math.round(v*10),
-    dispMin:0, dispMax:2, dispStep:0.1 },
-  { id:'sl-src-f', valId:'val-src-f',   suffix:'f₀', width:'32px',
+    dispMin:0, dispMax:10, dispStep:0.1 },
+  { id:'sl-src-f', valId:'val-src-f',   suffix:null, width:'36px',
     toDisplay: v => +(v/10).toFixed(1),  toRaw: v => Math.round(v*10),
-    dispMin:0, dispMax:2, dispStep:0.1 },
-  { id:'sl-src-p', valId:'val-src-p',   suffix:'π',  width:'38px',
-    toDisplay: v => +(v*0.2).toFixed(1),  toRaw: v => Math.round(v/0.2),
-    dispMin:-2, dispMax:2, dispStep:0.2 },
+    dispMin:0, dispMax:10, dispStep:0.1 },
+  { id:'sl-src-p', valId:'val-src-p',   suffix:null, width:'52px', inputType:'text',
+    toDisplay: v => { const n = +(v/12).toFixed(2); return (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); },
+    toRaw: v => { const f = parseFloat(String(v).replace('+ ','').replace('- ','-')); return isNaN(f) ? 0 : Math.round(f*12); },
+    dispMin:-2, dispMax:2, dispStep:1/12 },
 ]);
 
 document.body.classList.add('light');
