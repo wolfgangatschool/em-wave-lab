@@ -221,7 +221,6 @@ canvas#field.draw-mode { cursor: crosshair; }
 .slider-group { margin-bottom: 7px; }
 .slider-group:last-child { margin-bottom: 0; }
 .slider-group.disabled { opacity: 0.35; pointer-events: none; }
-#sg-src-mod.disabled { opacity: 0.35; pointer-events: none; }
 .slider-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
 .slider-label .pname { font-family: 'DM Mono', monospace; font-weight: 500; font-size: 14px; color: var(--text-bright); }
 .slider-label .pval  { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text-dim); }
@@ -717,8 +716,8 @@ self.onmessage = function(ev) {
   <div class="header-inner">
     <div class="header-title">EM-Wave Lab</div>
     <div class="engine-switch">
-      <button id="btn-engine-lw"   class="engine-btn active" title="Liénard-Wiechert / Phasor">LW</button>
-      <button id="btn-engine-fdtd" class="engine-btn"        title="FDTD Zeitbereich">FDTD</button>
+      <button id="btn-engine-lw"   class="engine-btn"        title="Liénard-Wiechert / Phasor">LW</button>
+      <button id="btn-engine-fdtd" class="engine-btn active" title="FDTD Zeitbereich">FDTD</button>
     </div>
     <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
     <div class="header-controls">
@@ -750,7 +749,7 @@ self.onmessage = function(ev) {
     <div class="sb-group">
       <div class="sb-label">Quellen Array</div>
       <!-- Mode selector: LW only -->
-      <div id="sg-mode-lw" data-engines="lw">
+      <div id="sg-mode-lw">
         <select class="src-select" id="sel-mode" style="margin-bottom:8px;width:100%">
           <option value="punkt">Punkt Quellen</option>
           <option value="dipol">Dipolantenne</option>
@@ -760,9 +759,9 @@ self.onmessage = function(ev) {
       <div id="sg-punkt">
         <div class="slider-group" id="sg-N" style="color:var(--blue)">
           <div class="slider-label src-formula">
-            <span class="src-name">Anzahl</span><span class="src-eq">N = <span class="pval" id="val-N">2</span></span>
+            <span class="src-name">Anzahl</span><span class="src-eq">N = <span class="pval" id="val-N">1</span></span>
           </div>
-          <input type="range" id="sl-N" min="1" max="1000" value="2" step="1">
+          <input type="range" id="sl-N" min="1" max="1000" value="1" step="1">
         </div>
         <div class="slider-group" id="sg-d" style="color:var(--blue)">
           <div class="slider-label src-formula">
@@ -967,6 +966,13 @@ class EngineFDTD {
     this.sponge  = new Float32Array(this.NX * this.NY);
     this.pecMask = new Uint8Array(this.NX * this.NY).fill(1);
     this.screenAcc = new Float32Array(this.ANY);
+    // Ring-buffer for box-car averaging Ez² over one full Ez² period (= N_LAM/DT/2 steps),
+    // so the 2f0 oscillation cancels exactly and screenAcc is temporally stable.
+    this._scrPeriod = Math.round(this.N_LAM / this.DT / 2); // 20 steps
+    this._scrBuf    = new Float32Array(this.ANY * this._scrPeriod);
+    this._scrSum    = new Float64Array(this.ANY);
+    this._scrBufIdx = 0;
+    this._scrI      = this.AX0 + 1; // screen column, set each tick
 
     // Simulation state
     this.simStep = 0;
@@ -989,11 +995,13 @@ class EngineFDTD {
 
     this._initSponge();
     this._updateSrcGridPos();
-    // Warmup: fixed wall-clock budget — scale steps inversely with domain area
-    const _warmup = Math.max(80, Math.round(400 * (280 * 340) / (this.NX * this.NY)));
-    for (let i = 0; i < _warmup; i++) this._step();
-    this.screenAcc.fill(0);
-    this.simStep = 0;
+    this._dipoleMode     = false;
+    this._dipoleL        = 0;
+    this._dipoleInfinite = false;
+    // Async warmup: run in 20-step chunks, yielding to the event loop between each,
+    // so the render loop keeps animating while the field settles (~80 steps total).
+    this._warmupId = 0;
+    this._doWarmup(80, 0);
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
@@ -1052,11 +1060,30 @@ class EngineFDTD {
       }
     }
     // 3. Soft source injection
-    const omega = 2 * Math.PI * this.DT / this.N_LAM;  // DT factor: 1 wavelength = N_LAM/DT steps
+    const omega   = 2 * Math.PI * this.DT / this.N_LAM;
     const base_src = I_SRC * NY;
-    for (const { j_pos, amp, phase } of this.srcGridPos) {
-      if (j_pos >= AY0 && j_pos < AY1 && amp > 1e-6)
-        Ez[base_src + j_pos] += 0.08 * amp * Math.sin(omega * this.simStep + phase);
+    const sig = Math.sin(omega * this.simStep);
+    if (this._dipoleMode) {
+      if (this._dipoleInfinite) {
+        // Plane-wave approximation: uniform injection across full active height
+        for (let j = AY0 + 1; j < AY1 - 1; j++)
+          Ez[base_src + j] += 0.08 * sig;
+      } else {
+        // Half-wave cosine current distribution over ±L/2
+        const L_cells = Math.max(1, Math.round(this._dipoleL * this.N_LAM));
+        const j0 = this.J_CTR - Math.floor(L_cells / 2);
+        const j1 = this.J_CTR + Math.floor(L_cells / 2);
+        for (let j = j0; j <= j1; j++) {
+          if (j <= AY0 || j >= AY1) continue;
+          const frac = (j - this.J_CTR) / Math.max(1, L_cells / 2); // −1…+1
+          Ez[base_src + j] += 0.08 * Math.cos(Math.PI * frac / 2) * sig;
+        }
+      }
+    } else {
+      for (const { j_pos, amp, phase } of this.srcGridPos) {
+        if (j_pos >= AY0 && j_pos < AY1 && amp > 1e-6)
+          Ez[base_src + j_pos] += 0.08 * amp * Math.sin(omega * this.simStep + phase);
+      }
     }
     // 4. PEC + sponge
     for (let k = 0; k < NX * NY; k++) {
@@ -1064,22 +1091,70 @@ class EngineFDTD {
       else { const s = sponge[k]; Ez[k] *= s; Hx[k] *= s; Hy[k] *= s; }
     }
     this.simStep++;
+    // 5. Screen accumulator: ring-buffer box-car average over one Ez² period (N_LAM/DT/2 steps).
+    // Averaging over an exact integer number of Ez² oscillation periods makes screenAcc
+    // temporally constant in steady state — the 2f0 ripple cancels exactly.
+    const scr = this._scrI, P = this._scrPeriod, idx = this._scrBufIdx;
+    const base_scr = scr * NY;
+    for (let iy = 0; iy < this.ANY; iy++) {
+      const v2 = Ez[base_scr + AY0 + iy] ** 2;
+      const slot = iy * P + idx;
+      this._scrSum[iy] += v2 - this._scrBuf[slot];
+      this._scrBuf[slot] = v2;
+    }
+    this._scrBufIdx = (idx + 1) % P;
+    if (this.simStep >= P) {
+      const inv = 1 / P;
+      for (let iy = 0; iy < this.ANY; iy++) this.screenAcc[iy] = this._scrSum[iy] * inv;
+    }
+  }
+
+  _doWarmup(steps, id) {
+    const CHUNK = 20;
+    const run = (remaining) => {
+      if (this._warmupId !== id) return;  // superseded by a newer reset
+      const n = Math.min(CHUNK, remaining);
+      for (let i = 0; i < n; i++) this._step();
+      if (remaining - n > 0) {
+        setTimeout(() => run(remaining - n), 0);
+      } else {
+        // warmup done: clear transient accumulation
+        if (this._warmupId === id) {
+          this.screenAcc.fill(0); this._scrBuf.fill(0); this._scrSum.fill(0);
+          this._scrBufIdx = 0; this.simStep = 0;
+        }
+      }
+    };
+    run(steps);
   }
 
   _resetFields() {
     this.Ez.fill(0); this.Hx.fill(0); this.Hy.fill(0);
-    this.screenAcc.fill(0);
-    this.simStep = 0;
-    const _warmup = Math.max(80, Math.round(400 * (280 * 340) / (this.NX * this.NY)));
-    for (let i = 0; i < _warmup; i++) this._step();
-    this.screenAcc.fill(0);
-    this.simStep = 0;
+    this.screenAcc.fill(0); this._scrBuf.fill(0); this._scrSum.fill(0);
+    this._scrBufIdx = 0; this.simStep = 0;
+    this._warmupId = (this._warmupId || 0) + 1;
+    this._doWarmup(80, this._warmupId);
+  }
+
+  setDipole(L_lam, infinite) {
+    this._dipoleMode     = true;
+    this._dipoleL        = Math.max(0.1, L_lam);
+    this._dipoleInfinite = !!infinite;
+    this._resetFields();
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────
   // stepsFloat: fractional step count driven by animSpeed (see render loop)
   tick(ts, stepsFloat) {
-    const SCREEN_DECAY = 0.015;
+    // Update screen column before stepping so every _step() accumulates at the correct column.
+    // Reset ring buffer if the screen position changed (avoids mixing data from two positions).
+    const i_scr = Math.min(Math.max(
+      Math.round(this.AX0 + screenLam * this.N_LAM), this.AX0), this.AX1 - 1);
+    if (i_scr !== this._scrI) {
+      this._scrI = i_scr;
+      this.screenAcc.fill(0); this._scrBuf.fill(0); this._scrSum.fill(0);
+      this._scrBufIdx = 0;
+    }
     this._stepAccum += stepsFloat * this.stepsPerFrame;
     while (this._stepAccum >= 1) { this._step(); this._stepAccum -= 1; }
 
@@ -1088,15 +1163,6 @@ class EngineFDTD {
     if (ts - this._fpsLast > 1000) {
       this._fps = Math.round(this._fpsCount * 1000 / (ts - this._fpsLast));
       this._fpsCount = 0; this._fpsLast = ts;
-    }
-
-    // Screen accumulator at current screenLam
-    const i_scr = Math.min(Math.max(
-      Math.round(this.AX0 + screenLam * this.N_LAM), this.AX0), this.AX1 - 1);
-    const base_scr = i_scr * this.NY;
-    for (let iy = 0; iy < this.ANY; iy++) {
-      const v = this.Ez[base_scr + this.AY0 + iy];
-      this.screenAcc[iy] = this.screenAcc[iy] * (1 - SCREEN_DECAY) + v * v * SCREEN_DECAY;
     }
   }
 
@@ -1144,6 +1210,7 @@ class EngineFDTD {
   }
 
   setSources(N, d_lam, srcs) {
+    this._dipoleMode = false;
     this.N_SRC = Math.min(N, 20);
     this.d_lam = d_lam;
     for (let i = 0; i < this.N_SRC && i < srcs.length; i++) {
@@ -1314,7 +1381,7 @@ let isDipolMode   = false;
 let dipolInfinite = true;
 let L_lam         = 0.5;
 
-let N_SRC = 2;
+let N_SRC = 1;
 let f0    = 6e9;  // 6 GHz matches slider default
 let d_m   = 0.1;
 let d_lam = 1.5;
@@ -1453,6 +1520,7 @@ canvas.addEventListener('touchmove', e => {
     slYl.value  = ylHalf.toFixed(3);
     document.getElementById('val-xl1').textContent = fmtLam(XL1);
     document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
+    _scheduleViewportUpdate();
     recompute();
     return;
   }
@@ -1480,6 +1548,8 @@ let activeEngineId = 'lw';
 let fdtdEngine     = null;
 let _fdtdSliderDragging = false;  // true while N/d slider is being changed; defers warmup-triggering ops
 let _fdtdSliderTimer   = null;    // debounce timer for slider drag end
+let _fdtdViewportDragging = false; // true while XL/YL viewport sliders are being dragged
+let _fdtdViewportTimer    = null;  // debounce timer for viewport drag end
 // FDTD canvas draw-mode state (λ-unit coords)
 let fdtdDrawMode    = false;
 let fdtdDrawStart   = null;
@@ -1494,10 +1564,9 @@ function updatePanelVisibility() {
     el.style.display = ok ? '' : 'none';
   });
 
-  // Dipole group: LW-only, but its visibility is also controlled by applyMode()
-  // Force hidden in FDTD; in LW restore based on current mode
+  // Dipole controls: visibility driven by applyMode() / isDipolMode, independent of engine
   const dipoleEl = document.getElementById('sg-dipole');
-  if (dipoleEl) dipoleEl.style.display = isFDTD ? 'none' : (isDipolMode ? '' : 'none');
+  if (dipoleEl) dipoleEl.style.display = isDipolMode ? '' : 'none';
 
   // Header controls: always active (Fraunhofer/timeavg are no-ops in FDTD, speed slider is remapped)
 
@@ -1512,18 +1581,26 @@ function switchEngine(id) {
   if (id === activeEngineId) return;
 
   if (id === 'fdtd') {
+    // If coming from LW with N > 1 (and not dipole mode), reset to single source
+    if (!isDipolMode && N_SRC > 1) {
+      N_SRC = 1;
+      document.getElementById('sl-N').value = 1;
+      document.getElementById('val-N').value = 1;
+      buildRows();
+    }
     // Create or update FDTD engine with current shared params.
-    // Clamp viewport to the 600k-cell cap so switching to FDTD after a large LW zoom doesn't OOM.
-    const _xlSafe = Math.min(XL1, 35);
-    const _yhSafe = Math.min(ylHalf, 17.5);
+    // Cap initial FDTD domain to 2M cells (~62λ × 31λ at 2:1 aspect)
+    const _maxCells = 2000000;
+    let _xlSafe = XL1, _yhSafe = ylHalf;
+    if ((_xlSafe * 20 + 40) * (_yhSafe * 40 + 40) > _maxCells) { _xlSafe = 35; _yhSafe = 17.5; }
     if (!fdtdEngine) {
       fdtdEngine = new EngineFDTD({ f0, N_SRC, d_lam, srcs: srcs.slice(0, N_SRC), xl_lam: _xlSafe, yl_half: _yhSafe });
     } else {
       fdtdEngine.setFrequency(f0);
       fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
     }
+    if (isDipolMode) fdtdEngine.setDipole(L_lam, dipolInfinite);
     activeEngineId = 'fdtd';
-    isDipolMode = false;  // FDTD has no dipole mode
     // Keep the user's current viewport (XL1, ylHalf) — the field is letterboxed within it
     screenAcc.fill(0); screenInst.fill(0);
     // Clear any stale LW loading indicator
@@ -1733,11 +1810,11 @@ function render(ts) {
   if (activeEngineId === 'fdtd' && fdtdEngine) {
     // Recreate engine if viewport λ-boundary changed (whole-λ in x, half-λ in y).
     // Deferred while a slider is being dragged to avoid repeated warmups mid-drag.
-    // Capped at 600k cells to prevent OOM on large viewports (e.g. after Fernfeldgrenze).
+    // Capped at 2M cells to prevent OOM on large viewports (e.g. after Fernfeldgrenze).
     const _xlNeed = Math.max(5, Math.ceil(XL1));
     const _yhNeed = Math.max(4, Math.round(ylHalf * 2) / 2);
     const _willNX = _xlNeed * 20 + 40, _willNY = _yhNeed * 40 + 40;
-    if (!_fdtdSliderDragging && _willNX * _willNY <= 600000
+    if (!_fdtdSliderDragging && !_fdtdViewportDragging && _willNX * _willNY <= 4000000
         && (fdtdEngine.XL_LAM !== _xlNeed || fdtdEngine.YL_HALF !== _yhNeed)) {
       const _prev = fdtdEngine;
       fdtdEngine = new EngineFDTD({ f0, N_SRC, d_lam, srcs: srcs.slice(0, N_SRC),
@@ -1755,7 +1832,10 @@ function render(ts) {
     }
 
     lam = C_LIGHT / f0; T_per = 1 / f0;
-    rFF = N_SRC <= 1 ? 0 : 2 * (N_SRC-1) * (N_SRC-1) * d_lam * d_lam;
+    rFF = isDipolMode && dipolInfinite ? NaN
+        : isDipolMode ? 2 * L_lam * L_lam
+        : N_SRC <= 1 ? 0
+        : 2 * (N_SRC-1) * (N_SRC-1) * d_lam * d_lam;
 
     // B-field available from Hx/Hy (set above with fdtdEngine.getField())
 
@@ -2661,6 +2741,7 @@ function buildRows() {
   selectedSrc = Math.min(selectedSrc, N_SRC - 1);
   selSrc.value = selectedSrc;
   syncRows();
+  document.getElementById('sg-src-mod').style.display = (isDipolMode || N_SRC <= 1) ? 'none' : '';
 }
 
 function syncRows() {
@@ -2716,7 +2797,11 @@ document.getElementById('sl-N').addEventListener('input', () => {
   const oldArr = Math.max(1, N_SRC - 1) * d_lam;
   readGlobals();
   rescaleAxesForArray(oldArr);
-  _scheduleFdtdSourceUpdate();
+  if (N_SRC > 1 && activeEngineId === 'fdtd') {
+    switchEngine('lw');
+  } else {
+    _scheduleFdtdSourceUpdate();
+  }
 });
 
 function lamStr() {
@@ -2835,13 +2920,16 @@ document.getElementById('btn-d-unit').addEventListener('change', function() {
 });
 
 function applyMode() {
-  if (activeEngineId === 'fdtd') return;  // dipol mode not applicable to FDTD
   isDipolMode = document.getElementById('sel-mode').value === 'dipol';
   document.getElementById('sg-punkt').style.display  = isDipolMode ? 'none' : '';
   document.getElementById('sg-dipole').style.display = isDipolMode ? ''     : 'none';
-  document.getElementById('sg-src-mod').classList.toggle('disabled', isDipolMode);
+  document.getElementById('sg-src-mod').style.display = (isDipolMode || N_SRC <= 1) ? 'none' : '';
   screenAcc.fill(0);
   wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+  if (activeEngineId === 'fdtd' && fdtdEngine) {
+    if (isDipolMode) fdtdEngine.setDipole(L_lam, dipolInfinite);
+    else             fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+  }
   recompute();
   updateDDisplay();
 }
@@ -2852,6 +2940,8 @@ function applyDipolControls() {
   document.getElementById('val-L').value = +L_lam.toFixed(3);
   screenAcc.fill(0);
   wsLatestEz = null; wsLatestBx = null; wsLatestBy = null;
+  if (activeEngineId === 'fdtd' && fdtdEngine && isDipolMode)
+    fdtdEngine.setDipole(L_lam, dipolInfinite);
   recompute();
 }
 document.getElementById('sel-mode').addEventListener('change', applyMode);
@@ -2883,6 +2973,14 @@ document.getElementById('sel-presets').addEventListener('change', e => {
   }
 });
 
+function _scheduleViewportUpdate() {
+  if (activeEngineId === 'fdtd') {
+    _fdtdViewportDragging = true;
+    clearTimeout(_fdtdViewportTimer);
+    _fdtdViewportTimer = setTimeout(() => { _fdtdViewportDragging = false; }, 300);
+  }
+}
+
 document.getElementById('sl-xl1').addEventListener('input', () => {
   XL1 = Number(document.getElementById('sl-xl1').value);
   xPhysMax = XL1 * lam;
@@ -2895,6 +2993,7 @@ document.getElementById('sl-xl1').addEventListener('input', () => {
     slYl.value = ylHalf.toFixed(3);
     document.getElementById('val-yl').textContent = fmtLam(ylHalf);
   }
+  _scheduleViewportUpdate();
   recompute();
 });
 
@@ -2911,6 +3010,7 @@ document.getElementById('sl-yl').addEventListener('input', () => {
     slXl1.value = XL1.toFixed(3);
     document.getElementById('val-xl1').textContent = fmtLam(XL1);
   }
+  _scheduleViewportUpdate();
   recompute();
 });
 
@@ -3273,11 +3373,13 @@ document.getElementById('btn-fdtd-reflektor').addEventListener('click', () => {
   if (fdtdEngine) { fdtdEngine.setSources(2, d_lam, srcs.slice(0, 2)); fdtdEngine.applyPreset('reflektor'); }
 });
 
-requestAnimationFrame(render);
 // Apply initial dipole UI state after all variables are declared
 document.getElementById('sg-L').classList.toggle('disabled', dipolInfinite);
-document.getElementById('sg-src-mod').classList.toggle('disabled', isDipolMode);
+document.getElementById('sg-src-mod').style.display = (isDipolMode || N_SRC <= 1) ? 'none' : '';
 document.getElementById('val-L').textContent = L_lam.toFixed(3).replace(/\.?0+$/, '');
+// Start in FDTD mode
+switchEngine('fdtd');
+requestAnimationFrame(render);
 </script>
 </body>
 </html>
