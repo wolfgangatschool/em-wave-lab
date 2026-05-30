@@ -944,18 +944,21 @@ function cmRGB(t) {
 // ── Grid constants ────────────────────────────────────────────────────────────
 // ── EngineFDTD ────────────────────────────────────────────────────────────────
 class EngineFDTD {
-  constructor({ f0 = 1e9, N_SRC = 2, d_lam = 1.5, srcs = [] } = {}) {
-    // Grid constants
-    this.NX = 240; this.NY = 340;
+  constructor({ f0 = 1e9, N_SRC = 2, d_lam = 1.5, srcs = [], xl_lam = 12, yl_half = 7.5 } = {}) {
+    // Grid constants derived from viewport
     this.N_PML = 20; this.N_LAM = 20; this.DT = 0.5;
-    this.AX0 = 20; this.AX1 = 220; this.AY0 = 20; this.AY1 = 320;
-    this.ANX = 200; this.ANY = 300;
-    this.XL_LAM  = 10;    // ANX / N_LAM
-    this.YL_HALF = 7.5;   // ANY / 2 / N_LAM
-    this.I_SRC   = 21;
-    this.J_CTR   = 169;
-    this.WALL_I  = 20 + 6 * 20;  // AX0 + 6λ
-    this.WALL_W  = 2;
+    this.XL_LAM  = Math.max(5,  Math.ceil(xl_lam));          // whole λ in x
+    this.YL_HALF = Math.max(4,  Math.round(yl_half * 2) / 2); // half-λ increments in y
+    this.ANX = this.XL_LAM * this.N_LAM;
+    this.ANY = Math.round(this.YL_HALF * 2 * this.N_LAM);
+    this.NX  = this.ANX + 2 * this.N_PML;
+    this.NY  = this.ANY + 2 * this.N_PML;
+    this.AX0 = this.N_PML; this.AX1 = this.NX - this.N_PML;
+    this.AY0 = this.N_PML; this.AY1 = this.NY - this.N_PML;
+    this.I_SRC  = this.AX0 + 1;
+    this.J_CTR  = this.AY0 + Math.floor(this.ANY / 2);
+    this.WALL_I = this.AX0 + 6 * this.N_LAM;
+    this.WALL_W = 2;
 
     // Field arrays
     this.Ez      = new Float32Array(this.NX * this.NY);
@@ -967,9 +970,9 @@ class EngineFDTD {
 
     // Simulation state
     this.simStep = 0;
-    this.stepsPerFrame = 1;  // speed multiplier vs animSpeed (1 = match LW, 4 = 4× faster)
-    this._stepAccum    = 0;  // fractional step accumulator
-    this._rawObs = [];       // [{i0,j0,i1,j1}]
+    this.stepsPerFrame = 1;
+    this._stepAccum    = 0;
+    this._rawObs = [];
     this.srcGridPos = [];
 
     // FPS tracking
@@ -986,8 +989,9 @@ class EngineFDTD {
 
     this._initSponge();
     this._updateSrcGridPos();
-    // Pre-run 300 steps to reach steady state
-    for (let i = 0; i < 300; i++) this._step();
+    // Warmup: fixed wall-clock budget — scale steps inversely with domain area
+    const _warmup = Math.max(80, Math.round(400 * (280 * 340) / (this.NX * this.NY)));
+    for (let i = 0; i < _warmup; i++) this._step();
     this.screenAcc.fill(0);
     this.simStep = 0;
   }
@@ -1048,7 +1052,7 @@ class EngineFDTD {
       }
     }
     // 3. Soft source injection
-    const omega = 2 * Math.PI / this.N_LAM;
+    const omega = 2 * Math.PI * this.DT / this.N_LAM;  // DT factor: 1 wavelength = N_LAM/DT steps
     const base_src = I_SRC * NY;
     for (const { j_pos, amp, phase } of this.srcGridPos) {
       if (j_pos >= AY0 && j_pos < AY1 && amp > 1e-6)
@@ -1064,6 +1068,10 @@ class EngineFDTD {
 
   _resetFields() {
     this.Ez.fill(0); this.Hx.fill(0); this.Hy.fill(0);
+    this.screenAcc.fill(0);
+    this.simStep = 0;
+    const _warmup = Math.max(80, Math.round(400 * (280 * 340) / (this.NX * this.NY)));
+    for (let i = 0; i < _warmup; i++) this._step();
     this.screenAcc.fill(0);
     this.simStep = 0;
   }
@@ -1470,6 +1478,8 @@ canvas.addEventListener('touchend', e => {
 // ── Engine management ─────────────────────────────────────────────────────────
 let activeEngineId = 'lw';
 let fdtdEngine     = null;
+let _fdtdSliderDragging = false;  // true while N/d slider is being changed; defers warmup-triggering ops
+let _fdtdSliderTimer   = null;    // debounce timer for slider drag end
 // FDTD canvas draw-mode state (λ-unit coords)
 let fdtdDrawMode    = false;
 let fdtdDrawStart   = null;
@@ -1502,9 +1512,12 @@ function switchEngine(id) {
   if (id === activeEngineId) return;
 
   if (id === 'fdtd') {
-    // Create or update FDTD engine with current shared params
+    // Create or update FDTD engine with current shared params.
+    // Clamp viewport to the 600k-cell cap so switching to FDTD after a large LW zoom doesn't OOM.
+    const _xlSafe = Math.min(XL1, 35);
+    const _yhSafe = Math.min(ylHalf, 17.5);
     if (!fdtdEngine) {
-      fdtdEngine = new EngineFDTD({ f0, N_SRC, d_lam, srcs: srcs.slice(0, N_SRC) });
+      fdtdEngine = new EngineFDTD({ f0, N_SRC, d_lam, srcs: srcs.slice(0, N_SRC), xl_lam: _xlSafe, yl_half: _yhSafe });
     } else {
       fdtdEngine.setFrequency(f0);
       fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
@@ -1718,6 +1731,19 @@ function render(ts) {
 
   // ── FDTD branch ───────────────────────────────────────────────────────────
   if (activeEngineId === 'fdtd' && fdtdEngine) {
+    // Recreate engine if viewport λ-boundary changed (whole-λ in x, half-λ in y).
+    // Deferred while a slider is being dragged to avoid repeated warmups mid-drag.
+    // Capped at 600k cells to prevent OOM on large viewports (e.g. after Fernfeldgrenze).
+    const _xlNeed = Math.max(5, Math.ceil(XL1));
+    const _yhNeed = Math.max(4, Math.round(ylHalf * 2) / 2);
+    const _willNX = _xlNeed * 20 + 40, _willNY = _yhNeed * 40 + 40;
+    if (!_fdtdSliderDragging && _willNX * _willNY <= 600000
+        && (fdtdEngine.XL_LAM !== _xlNeed || fdtdEngine.YL_HALF !== _yhNeed)) {
+      const _prev = fdtdEngine;
+      fdtdEngine = new EngineFDTD({ f0, N_SRC, d_lam, srcs: srcs.slice(0, N_SRC),
+                                    xl_lam: XL1, yl_half: ylHalf });
+      fdtdEngine.stepsPerFrame = _prev.stepsPerFrame;
+    }
     if (!isPaused) {
       // Match LW visual speed: dt*animSpeed*T_per / (DT/(N_LAM*f0)) = dt*animSpeed*N_LAM/DT
       const stepsFloat = dt * animSpeed * fdtdEngine.N_LAM / fdtdEngine.DT;
@@ -2239,7 +2265,7 @@ function draw() {
 
   ctx.font = fTickB;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  if (!isDipolMode && !wsLatestBx && activeEngineId === 'lw') {
+  if (activeEngineId === 'lw' && !isDipolMode && N_SRC <= WS_LW_THRESHOLD && !wsActive) {
     ctx.fillStyle = isLight ? '#1a7fb5cc' : '#6ed0ffcc';
     ctx.fillText('Ez  (wird berechnet…)', fx0 + 8, fy0 + 6);
   }
@@ -2676,14 +2702,21 @@ function readGlobals() {
   document.getElementById('val-N').value = newN;
   updateDDisplay();
 }
+function _scheduleFdtdSourceUpdate() {
+  _fdtdSliderDragging = true;
+  clearTimeout(_fdtdSliderTimer);
+  _fdtdSliderTimer = setTimeout(() => {
+    _fdtdSliderDragging = false;
+    if (activeEngineId === 'fdtd' && fdtdEngine)
+      fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
+    // render loop will now recreate engine if domain changed
+  }, 250);
+}
 document.getElementById('sl-N').addEventListener('input', () => {
   const oldArr = Math.max(1, N_SRC - 1) * d_lam;
   readGlobals();
-  if (activeEngineId === 'fdtd' && fdtdEngine) {
-    fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
-  } else {
-    rescaleAxesForArray(oldArr);
-  }
+  rescaleAxesForArray(oldArr);
+  _scheduleFdtdSourceUpdate();
 });
 
 function lamStr() {
@@ -2774,13 +2807,11 @@ _slD.addEventListener('input', function() {
   d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
   readGlobals();
   updateDDisplay();
-  if (activeEngineId === 'fdtd' && fdtdEngine) {
-    fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
-  } else {
-    rescaleAxesForArray(oldArr);
-  }
+  rescaleAxesForArray(oldArr);
+  _scheduleFdtdSourceUpdate();
 });
 _slD.addEventListener('change', function() {
+  clearTimeout(_fdtdSliderTimer); _fdtdSliderDragging = false;
   const oldArr = Math.max(1, N_SRC - 1) * d_lam;
   const v = Number(this.value);
   if (v >= 1000 && d_unit_idx < D_SCALES.length - 1) {
@@ -2791,11 +2822,9 @@ _slD.addEventListener('change', function() {
   d_m = Number(this.value) * D_SCALES[d_unit_idx].s;
   readGlobals();
   updateDDisplay();
-  if (activeEngineId === 'fdtd' && fdtdEngine) {
+  rescaleAxesForArray(oldArr);
+  if (activeEngineId === 'fdtd' && fdtdEngine)
     fdtdEngine.setSources(N_SRC, d_lam, srcs.slice(0, N_SRC));
-  } else {
-    rescaleAxesForArray(oldArr);
-  }
 });
 
 document.getElementById('btn-d-unit').addEventListener('change', function() {
