@@ -1671,8 +1671,10 @@ canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left), my = (e.clientY - rect.top);
   if (viewPlane === 'yz') {
-    const yScrPx = _layoutFy0 + (1 - (screenLam - YL0) / (YL1 - YL0)) * _layoutFh;
-    if (Math.abs(my - yScrPx) < 10) { _screenDragging = true; e.preventDefault(); }
+    // Vertical screens at y=+screenLam and y=−screenLam
+    const xScrPos = _layoutFx0 + (screenLam  + XL1) / (2 * XL1) * _layoutFw;
+    const xScrNeg = _layoutFx0 + (-screenLam + XL1) / (2 * XL1) * _layoutFw;
+    if (Math.abs(mx - xScrPos) < 10 || Math.abs(mx - xScrNeg) < 10) { _screenDragging = true; e.preventDefault(); }
   } else {
     const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
     if (Math.abs(mx - xScr) < 10) { _screenDragging = true; e.preventDefault(); }
@@ -1683,10 +1685,11 @@ canvas.addEventListener('mousemove', e => {
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left), my = (e.clientY - rect.top);
   if (viewPlane === 'yz') {
-    const yScrPx = _layoutFy0 + (1 - (screenLam - YL0) / (YL1 - YL0)) * _layoutFh;
+    const xScrPos = _layoutFx0 + (screenLam  + XL1) / (2 * XL1) * _layoutFw;
+    const xScrNeg = _layoutFx0 + (-screenLam + XL1) / (2 * XL1) * _layoutFw;
     if (_screenDragging) {
-      const newLam = YL0 + (1 - (my - _layoutFy0) / _layoutFh) * (YL1 - YL0);
-      screenLam = Math.max(0.5, Math.min(ylHalf, newLam));
+      const rawLam = (mx - _layoutFx0) / _layoutFw * 2 * XL1 - XL1;
+      screenLam = Math.max(1, Math.min(XL1, Math.abs(rawLam)));
       screenOverride = true;
       const scrSl = document.getElementById('sl-scr');
       if (scrSl) {
@@ -1694,7 +1697,7 @@ canvas.addEventListener('mousemove', e => {
         document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
       }
     } else {
-      canvas.style.cursor = Math.abs(my - yScrPx) < 10 ? 'ns-resize' : '';
+      canvas.style.cursor = (Math.abs(mx - xScrPos) < 10 || Math.abs(mx - xScrNeg) < 10) ? 'ew-resize' : '';
     }
   } else {
     const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
@@ -1732,8 +1735,9 @@ canvas.addEventListener('touchstart', e => {
   const mx = e.touches[0].clientX - rect.left;
   const my = e.touches[0].clientY - rect.top;
   if (viewPlane === 'yz') {
-    const yScrPx = _layoutFy0 + (1 - (screenLam - YL0) / (YL1 - YL0)) * _layoutFh;
-    if (Math.abs(my - yScrPx) < 20) { _screenDragging = true; e.preventDefault(); }
+    const xScrPos = _layoutFx0 + (screenLam  + XL1) / (2 * XL1) * _layoutFw;
+    const xScrNeg = _layoutFx0 + (-screenLam + XL1) / (2 * XL1) * _layoutFw;
+    if (Math.abs(mx - xScrPos) < 20 || Math.abs(mx - xScrNeg) < 20) { _screenDragging = true; e.preventDefault(); }
   } else {
     const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
     if (Math.abs(mx - xScr) < 20) { _screenDragging = true; e.preventDefault(); }
@@ -1778,8 +1782,8 @@ canvas.addEventListener('touchmove', e => {
   const my = e.touches[0].clientY - rect.top;
   let newLam;
   if (viewPlane === 'yz') {
-    newLam = YL0 + (1 - (my - _layoutFy0) / _layoutFh) * (YL1 - YL0);
-    screenLam = Math.max(0.5, Math.min(ylHalf, newLam));
+    const rawLam = (mx - _layoutFx0) / _layoutFw * 2 * XL1 - XL1;
+    screenLam = Math.max(1, Math.min(XL1, Math.abs(rawLam)));
   } else {
     newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
     screenLam = Math.max(1, Math.min(XL1, newLam));
@@ -1857,6 +1861,22 @@ function switchEngine(id) {
       document.getElementById('val-N').value = 1;
       buildRows();
     }
+    // Clamp viewport to FDTD max (3×rFF) when entering FDTD
+    const _fdtdFf  = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
+    const _fdtdMax = Math.ceil(Math.max(20, 3 * _fdtdFf) / 5) * 5;
+    if (XL1 > _fdtdMax) {
+      XL1 = _fdtdMax;
+      xPhysMax = XL1 * lam;
+      document.getElementById('sl-xl1').value = XL1.toFixed(3);
+      document.getElementById('val-xl1').textContent = fmtLam(XL1);
+      if (scaleLocked) {
+        ylHalf = aspectYHalf(XL1);
+        yPhysHalf = ylHalf * lam;
+        YL0 = -ylHalf; YL1 = ylHalf;
+        document.getElementById('sl-yl').value = ylHalf.toFixed(3);
+        document.getElementById('val-yl').textContent = fmtLam(ylHalf);
+      }
+    }
     // Create or update FDTD engine with current shared params.
     // Cap initial FDTD domain to 2M cells (~62λ × 31λ at 2:1 aspect)
     const _maxCells = 2000000;
@@ -1876,20 +1896,11 @@ function switchEngine(id) {
     _loadArea.classList.remove('reloading');
     _loadBarEl.style.width = '0%';
   } else {
-    // Switch back to LW
+    // Switch back to LW — keep the current FDTD viewport (Option C)
     activeEngineId = 'lw';
     fdtdDrawMode = false;
-    // Restore physical extents
-    if (xPhysMax !== null && f0 > 0) {
-      const newLam = C_LIGHT / f0;
-      XL1    = Math.max(1, xPhysMax  / newLam);
-      ylHalf = Math.max(1, yPhysHalf / newLam);
-      YL0 = -ylHalf; YL1 = ylHalf;
-      document.getElementById('sl-xl1').value = XL1.toFixed(3);
-      document.getElementById('sl-yl').value  = ylHalf.toFixed(3);
-      document.getElementById('val-xl1').textContent = fmtLam(XL1);
-      document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
-    }
+    // xPhysMax/yPhysHalf already reflect the FDTD zoom; slider max will expand
+    // to 10×rFF on next updateAxisSliders() call, leaving the zoom unchanged.
     screenAcc.fill(0); screenInst.fill(0);
     recompute();
   }
@@ -1910,13 +1921,11 @@ function recompute() {
   // FDTD path: update shared scalars only, skip phasor / LW work
   if (activeEngineId === 'fdtd') { updateStats(); return; }
 
-  // In yz view the screen is at z=screenLam (horizontal), max=ylHalf; else x=screenLam.
-  const _scrMax = viewPlane === 'yz' ? ylHalf : XL1;
-  const _scrMin = viewPlane === 'yz' ? 0.5 : 1;
+  // Screen: vertical line at x=screenLam (all views). In yz, also mirrored at −screenLam.
+  const _scrMax = XL1;
+  const _scrMin = 1;
   if (!screenOverride) {
-    screenLam = viewPlane === 'yz'
-      ? ylHalf * 0.85
-      : (rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85);
+    screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
   }
   screenLam = Math.max(_scrMin, Math.min(_scrMax, screenLam));
   const scrSl = document.getElementById('sl-scr');
@@ -2174,22 +2183,22 @@ function computeRzScreenPhasors() {
     ? Math.max(20, Math.min(300, Math.ceil(L_lam * 16))) : 1;
 
   if (viewPlane === 'yz') {
-    // Screen at z=screenLam (horizontal), I(y) for y ∈ [−XL1, +XL1]
-    const z_scr = screenLam * lam;
+    // Screen at y=screenLam (vertical, mirrored at −screenLam), I(z) for z ∈ [−ylHalf, +ylHalf]
+    const y_scr = screenLam * lam;
     for (let j = 0; j < NY_SCR; j++) {
-      const y = (-XL1 + 2 * XL1 * j / (NY_SCR - 1)) * lam;
+      const z = ((j / (NY_SCR - 1)) * 2 * ylHalf - ylHalf) * lam;
       let pr = 0, pi = 0;
       if (isDipolMode && dipolInfinite) {
-        const phi = -k * Math.abs(z_scr);
+        const phi = -k * y_scr;
         pr = Math.cos(phi); pi = Math.sin(phi);
       } else if (isDipolMode) {
         const L = L_lam * lam;
         for (let m = 0; m < M_dip; m++) {
           const zp = -L/2 + m/(M_dip-1)*L;
           const weight = Math.cos(Math.PI * zp / L);
-          const R = Math.sqrt(y*y + (z_scr-zp)*(z_scr-zp));
+          const R = Math.sqrt(y_scr*y_scr + (z-zp)*(z-zp));
           if (R < minR) continue;
-          const sinTh = Math.abs(y) / R;
+          const sinTh = y_scr / R;
           const phi   = -k * R;
           const amp   = weight * sinTh / R;
           pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
@@ -2199,8 +2208,8 @@ function computeRzScreenPhasors() {
           const {amp, phase} = srcs[n];
           if (amp < 1e-6) continue;
           const yn = (n - (N_SRC-1)/2) * D;
-          const dy = y - yn;
-          const R  = Math.sqrt(dy*dy + z_scr*z_scr);
+          const dy = y_scr - yn;
+          const R  = Math.sqrt(dy*dy + z*z);
           if (R < minR) continue;
           const sinTh = Math.abs(dy) / R;
           const phi = phase - k * R;
@@ -2654,30 +2663,33 @@ function drawStreamlines(ctx2d, Bx, By, fieldNX, fieldNY, fx0, fy0, fw, fh) {
 let scaleLocked = true;
 let _axisInit   = false;
 
-function computeXMax() {
-  const ff  = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
-  const raw = Math.max(20, 3 * ff);
-  return Math.ceil(raw / 5) * 5;   // round up to nearest 5 λ
-}
 function aspectYHalf(xl1) {
-  return _layoutFw > 0 ? xl1 * _layoutFh / (2 * _layoutFw) : xl1 / 2;
+  // yz x-span is 2×XL1 (symmetric), xy/xz is XL1; adjust so 1λ = 1λ on both axes
+  const div = viewPlane === 'yz' ? _layoutFw : 2 * _layoutFw;
+  return _layoutFw > 0 ? xl1 * _layoutFh / div : xl1 / 2;
 }
 function aspectXL1(yh) {
-  return _layoutFh > 0 ? yh * 2 * _layoutFw / _layoutFh : yh * 2;
+  const mul = viewPlane === 'yz' ? _layoutFw : 2 * _layoutFw;
+  return _layoutFh > 0 ? yh * mul / _layoutFh : yh * 2;
 }
 function rescaleAxesForArray(oldArrayLam) {
   const newArrayLam = Math.max(1, N_SRC - 1) * d_lam;
   if (oldArrayLam <= 0 || newArrayLam === oldArrayLam) return;
   const ratio = newArrayLam / oldArrayLam;
-  const slYl = document.getElementById('sl-yl');
-  ylHalf = Math.max(Number(slYl.min) || 0.5, Math.min(Number(slYl.max) || 30, ylHalf * ratio));
+  const slYl  = document.getElementById('sl-yl');
+  const slXl1 = document.getElementById('sl-xl1');
+  // Compute fresh caps from current rFF (just updated by recompute in readGlobals).
+  // Use LW factor (10×) since N>1 auto-switches to LW; avoids stale slider-max clamping.
+  const _ff   = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
+  const _xMax = Math.ceil(Math.max(20, 10 * _ff) / 5) * 5;
+  const _yMax = scaleLocked ? Math.max(0.25, aspectYHalf(_xMax)) : 30;
+  ylHalf = Math.max(Number(slYl.min) || 0.5, Math.min(_yMax, ylHalf * ratio));
   yPhysHalf = ylHalf * lam;
   YL0 = -ylHalf; YL1 = ylHalf;
   slYl.value = ylHalf.toFixed(3);
   document.getElementById('val-yl').textContent = fmtLam(ylHalf);
   if (scaleLocked) {
-    const slXl1 = document.getElementById('sl-xl1');
-    XL1 = Math.max(Number(slXl1.min) || 1, Math.min(Number(slXl1.max) || 100, XL1 * ratio));
+    XL1 = Math.max(Number(slXl1.min) || 1, Math.min(_xMax, XL1 * ratio));
     xPhysMax = XL1 * lam;
     slXl1.value = XL1.toFixed(3);
     document.getElementById('val-xl1').textContent = fmtLam(XL1);
@@ -2697,8 +2709,9 @@ function updateAxisSliders() {
 
   if (_layoutFw <= 0 || _layoutFh <= 0) return;
 
-  const ff    = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
-  const xMax  = Math.ceil(Math.max(20, 10 * ff) / 5) * 5;
+  const ff     = (Number.isFinite(rFF) && rFF > 0) ? rFF : 0;
+  const factor = activeEngineId === 'fdtd' ? 3 : 10;
+  const xMax   = Math.ceil(Math.max(20, factor * ff) / 5) * 5;
   slXl1.min = 1; slXl1.max = xMax;
   if (scaleLocked) {
     const yFromMin = Math.round(aspectYHalf(Number(slXl1.min)) * 100) / 100;
@@ -2723,6 +2736,11 @@ function updateAxisSliders() {
   // On first valid layout, enforce equal scale if locked
   if (!_axisInit && lam > 0) {
     _axisInit = true;
+    if (ff > 0) {
+      XL1 = xMax;  // auto-set to full factor×rFF range on first load
+      slXl1.value = XL1.toFixed(3);
+      document.getElementById('val-xl1').textContent = fmtLam(XL1);
+    }
     if (scaleLocked) {
       ylHalf = aspectYHalf(XL1);
       YL0 = -ylHalf; YL1 = ylHalf;
@@ -2944,11 +2962,13 @@ function draw() {
   ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 7;
   ctx.setLineDash([]); ctx.font = fTickB; ctx.fillStyle = GOLD;
   if (viewPlane === 'yz') {
-    // Horizontal screen line at z=screenLam
-    const yScrLine = yPx(screenLam);
-    ctx.beginPath(); ctx.moveTo(fx0, yScrLine); ctx.lineTo(fx0 + fw, yScrLine); ctx.stroke();
-    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-    ctx.fillText('Schirm (' + screenLam.toFixed(1) + ' λ)', fx0 + 4, yScrLine - 3);
+    // Two vertical screen lines at y=+screenLam and y=−screenLam (yz symmetric)
+    const xScrPos = xPx( screenLam);
+    const xScrNeg = xPx(-screenLam);
+    ctx.beginPath(); ctx.moveTo(xScrPos, fy0); ctx.lineTo(xScrPos, fy0 + fh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xScrNeg, fy0); ctx.lineTo(xScrNeg, fy0 + fh); ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Schirm (' + screenLam.toFixed(1) + ' λ)', xScrPos + 6, fy0 + 4 + (isMob ? 14 : 18));
   } else {
     const xScr = xPx(screenLam);
     ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh); ctx.stroke();
@@ -3480,16 +3500,14 @@ function updateF0Display() {
   if (lamEl) lamEl.textContent = lamStr();
 }
 function onFreqChange() {
+  const newLam = C_LIGHT / f0;
   if (activeEngineId === 'fdtd' && fdtdEngine) {
     fdtdEngine.setFrequency(f0);
-    lam = C_LIGHT / f0; T_per = 1 / f0;
-    d_lam = d_m * f0 / C_LIGHT;
-    updateF0Display(); updateStats();
-    return;
   }
+  lam = newLam; T_per = 1 / f0;
+  d_lam = d_m * f0 / C_LIGHT;
   // Keep physical extents constant: recompute XL1/ylHalf from stored metres
   if (xPhysMax !== null && f0 > 0) {
-    const newLam = C_LIGHT / f0;
     XL1    = Math.max(1, xPhysMax  / newLam);
     ylHalf = Math.max(1, yPhysHalf / newLam);
     YL0 = -ylHalf; YL1 = ylHalf;
@@ -3498,9 +3516,11 @@ function onFreqChange() {
     document.getElementById('val-xl1').textContent = fmtLam(XL1);
     document.getElementById('val-yl').textContent  = fmtLam(ylHalf);
   }
-  readGlobals();
-  updateF0Display();
-  updateTempoDisplay();
+  updateF0Display(); updateStats();
+  if (activeEngineId !== 'fdtd') {
+    readGlobals();
+    updateTempoDisplay();
+  }
 }
 
 const _slF0 = document.getElementById('sl-f0');
