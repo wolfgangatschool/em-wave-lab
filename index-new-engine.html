@@ -3442,17 +3442,20 @@ slSrcA.addEventListener('input', () => {
   document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
   screenAcc.fill(0); acc2D.fill(0);
   if (activeEngineId === 'fdtd' && fdtdEngine) fdtdEngine.setSourceParam(selectedSrc, { amp: srcs[selectedSrc].amp });
+  recompute();
 });
 slSrcF.addEventListener('input', () => {
   srcs[selectedSrc].fmul = slSrcF.value / 10;
   document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
   screenAcc.fill(0); acc2D.fill(0);
+  recompute();
 });
 slSrcP.addEventListener('input', () => {
   srcs[selectedSrc].phase = slSrcP.value * Math.PI / 12;
   { const n = +(slSrcP.value / 12).toFixed(2); document.getElementById('val-src-p').value = (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); }
   screenAcc.fill(0); acc2D.fill(0);
   if (activeEngineId === 'fdtd' && fdtdEngine) fdtdEngine.setSourceParam(selectedSrc, { phase: srcs[selectedSrc].phase });
+  recompute();
 });
 
 function readGlobals() {
@@ -3632,7 +3635,7 @@ document.getElementById('sel-mode').addEventListener('change', applyMode);
 document.getElementById('chk-infinite').addEventListener('change', applyDipolControls);
 document.getElementById('sl-L').addEventListener('input', applyDipolControls);
 
-function preset(fn) { for (let n = 0; n < N_SRC; n++) fn(n); syncRows(); }
+function preset(fn) { for (let n = 0; n < N_SRC; n++) fn(n); syncRows(); screenAcc.fill(0); acc2D.fill(0); recompute(); }
 const _presetFns = {
   alt:  () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = n%2===0 ? 0 : Math.PI; }),
   beam: () => preset(n => { srcs[n].amp=1; srcs[n].fmul=1; srcs[n].phase = (n*Math.PI/4)%(2*Math.PI); }),
