@@ -102,6 +102,7 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
 }
 #btn-fraunhofer:hover { opacity: 1; }
 #btn-fraunhofer:disabled { opacity: 0.25; cursor: default; }
+#btn-timeavg:disabled { opacity: 0.25; cursor: default; }
 .load-area {
   flex: 1; position: relative;
 }
@@ -856,7 +857,7 @@ self.onmessage = function(ev) {
 
 
     <!-- ── FDTD: obstacle drawing ───────────────────────────────── -->
-    <div class="sb-group" data-engines="fdtd" style="display:none">
+    <div id="sg-obstacles" class="sb-group" data-engines="fdtd" style="display:none">
       <div class="sb-label">Hindernisse</div>
       <div class="obstacle-btns">
         <button id="btn-draw-fdtd" title="Rechteck zeichnen">✏ Zeichnen</button>
@@ -865,7 +866,7 @@ self.onmessage = function(ev) {
     </div>
 
     <!-- ── FDTD: obstacle presets ────────────────────────────────── -->
-    <div class="sb-group" data-engines="fdtd" style="display:none">
+    <div id="sg-presets-fdtd" class="sb-group" data-engines="fdtd" style="display:none">
       <div class="sb-label">Presets (FDTD)</div>
       <div class="preset-stack">
         <button class="preset-btn" id="btn-fdtd-einzelspalt">Einzelspalt (2λ)</button>
@@ -1366,7 +1367,7 @@ class EngineFDTD_Cyl {
       const base = ir * NZ, base1 = base + NZ;
       for (let iz = 0; iz < NZ - 1; iz++) {
         const k = base + iz;
-        Hp[k] -= DT * (Ez[base1 + iz] - Ez[base + iz])   // ∂Ez/∂r
+        Hp[k] += DT * (Ez[base1 + iz] - Ez[base + iz])   // ∂Ez/∂r
                - DT * (Er[base  + iz + 1] - Er[base + iz]); // ∂Er/∂z  (sign from Faraday)
       }
     }
@@ -1428,6 +1429,8 @@ class EngineFDTD_Cyl {
   }
 
   _doWarmup(steps, id) {
+    // Async chunks to avoid blocking the UI thread.
+    // simStep is NOT reset at end — source phase stays continuous with the built-up field.
     const CHUNK = 60;
     const run = (rem) => {
       if (this._warmupId !== id) return;
@@ -1436,7 +1439,7 @@ class EngineFDTD_Cyl {
       if (rem - n > 0) setTimeout(() => run(rem - n), 0);
       else if (this._warmupId === id) {
         this.screenAcc.fill(0); this._scrBuf.fill(0); this._scrSum.fill(0);
-        this._scrBufIdx = 0; this.simStep = 0;
+        this._scrBufIdx = 0;
       }
     };
     run(steps);
@@ -1469,19 +1472,18 @@ class EngineFDTD_Cyl {
     }
   }
 
-  // Returns |E|² = Ez²+Er² for the active region, layout [ir*ANZ+iz], iz=0=bottom(z=-YL_HALF)
+  // Returns signed Ez for the active region, layout [ir*ANZ+iz], iz=0=bottom(z=-YL_HALF).
+  // Signed Ez oscillates ±, giving the same blue↔red animation as the Cartesian FDTD.
   getField() {
     const { ANR, ANZ, NZ, AZ0 } = this;
-    const Emag = new Float32Array(ANR * ANZ);
+    const EzF = new Float32Array(ANR * ANZ);
     for (let ir = 0; ir < ANR; ir++) {
       const base = ir * NZ + AZ0;
       for (let iz = 0; iz < ANZ; iz++) {
-        const ez = this.Ez[base + iz];
-        const er = this.Er[base + iz];
-        Emag[ir * ANZ + iz] = Math.sqrt(ez * ez + er * er);
+        EzF[ir * ANZ + iz] = this.Ez[base + iz];
       }
     }
-    return Emag;
+    return EzF;
   }
 
   getScreenData(scrLam) {
@@ -1498,6 +1500,28 @@ class EngineFDTD_Cyl {
       const e2_0 = ez0*ez0 + er0*er0, e2_1 = ez1*ez1 + er1*er1;
       inst[j] = e2_0 * (1-a) + e2_1 * a;
       avg[j]  = this.screenAcc[iz0] * (1-a) + this.screenAcc[iz0+1] * a;
+    }
+    return { inst, avg };
+  }
+
+  // For yz view: sample at fixed z=scrLam(λ), varying y ∈ [−xlHalf, +xlHalf] via symmetry |y|→r
+  getScreenDataZ(scrLam, xlHalf) {
+    const inst = new Float64Array(NY_SCR);
+    const avg  = new Float64Array(NY_SCR);
+    const iz_in = Math.min(Math.max(
+      Math.round((scrLam + this.YL_HALF) / (2 * this.YL_HALF) * this.ANZ), 0), this.ANZ - 1);
+    const base_iz = this.AZ0 + iz_in;
+    for (let j = 0; j < NY_SCR; j++) {
+      const y_lam  = -xlHalf + 2 * xlHalf * j / (NY_SCR - 1);
+      const r_frac = Math.abs(y_lam) * this.N_LAM;
+      const ir0    = Math.min(Math.floor(r_frac), this.ANR - 2);
+      const af     = r_frac - ir0;
+      const ez0 = this.Ez[ ir0      * this.NZ + base_iz];
+      const ez1 = this.Ez[(ir0 + 1) * this.NZ + base_iz];
+      const er0 = ir0 > 0 ? this.Er[ir0 * this.NZ + base_iz] : 0;
+      const er1 = this.Er[(ir0 + 1) * this.NZ + base_iz];
+      const e2  = (ez0*ez0 + er0*er0) * (1-af) + (ez1*ez1 + er1*er1) * af;
+      inst[j] = e2; avg[j] = e2;
     }
     return { inst, avg };
   }
@@ -1645,29 +1669,47 @@ let _pinchStartXL1 = 0, _pinchStartYlHalf = 0;
 
 canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left);
-  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
-  if (Math.abs(mx - xScr) < 10) {
-    _screenDragging = true;
-    e.preventDefault();
+  const mx = (e.clientX - rect.left), my = (e.clientY - rect.top);
+  if (viewPlane === 'yz') {
+    const yScrPx = _layoutFy0 + (1 - (screenLam - YL0) / (YL1 - YL0)) * _layoutFh;
+    if (Math.abs(my - yScrPx) < 10) { _screenDragging = true; e.preventDefault(); }
+  } else {
+    const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+    if (Math.abs(mx - xScr) < 10) { _screenDragging = true; e.preventDefault(); }
   }
 });
 
 canvas.addEventListener('mousemove', e => {
   const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left);
-  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
-  if (_screenDragging) {
-    const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
-    screenLam = Math.max(1, Math.min(XL1, newLam));
-    screenOverride = true;
-    const scrSl = document.getElementById('sl-scr');
-    if (scrSl) {
-      scrSl.value = screenLam.toFixed(1);
-      document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+  const mx = (e.clientX - rect.left), my = (e.clientY - rect.top);
+  if (viewPlane === 'yz') {
+    const yScrPx = _layoutFy0 + (1 - (screenLam - YL0) / (YL1 - YL0)) * _layoutFh;
+    if (_screenDragging) {
+      const newLam = YL0 + (1 - (my - _layoutFy0) / _layoutFh) * (YL1 - YL0);
+      screenLam = Math.max(0.5, Math.min(ylHalf, newLam));
+      screenOverride = true;
+      const scrSl = document.getElementById('sl-scr');
+      if (scrSl) {
+        scrSl.value = screenLam.toFixed(1);
+        document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+      }
+    } else {
+      canvas.style.cursor = Math.abs(my - yScrPx) < 10 ? 'ns-resize' : '';
     }
   } else {
-    canvas.style.cursor = Math.abs(mx - xScr) < 10 ? 'ew-resize' : '';
+    const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+    if (_screenDragging) {
+      const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
+      screenLam = Math.max(1, Math.min(XL1, newLam));
+      screenOverride = true;
+      const scrSl = document.getElementById('sl-scr');
+      if (scrSl) {
+        scrSl.value = screenLam.toFixed(1);
+        document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
+      }
+    } else {
+      canvas.style.cursor = Math.abs(mx - xScr) < 10 ? 'ew-resize' : '';
+    }
   }
 });
 
@@ -1688,10 +1730,13 @@ canvas.addEventListener('touchstart', e => {
   }
   const rect = canvas.getBoundingClientRect();
   const mx = e.touches[0].clientX - rect.left;
-  const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
-  if (Math.abs(mx - xScr) < 20) {
-    _screenDragging = true;
-    e.preventDefault();
+  const my = e.touches[0].clientY - rect.top;
+  if (viewPlane === 'yz') {
+    const yScrPx = _layoutFy0 + (1 - (screenLam - YL0) / (YL1 - YL0)) * _layoutFh;
+    if (Math.abs(my - yScrPx) < 20) { _screenDragging = true; e.preventDefault(); }
+  } else {
+    const xScr = _layoutFx0 + (screenLam - XL0) / (XL1 - XL0) * _layoutFw;
+    if (Math.abs(mx - xScr) < 20) { _screenDragging = true; e.preventDefault(); }
   }
 }, { passive: false });
 
@@ -1730,8 +1775,15 @@ canvas.addEventListener('touchmove', e => {
   if (!_screenDragging) return;
   const rect = canvas.getBoundingClientRect();
   const mx = e.touches[0].clientX - rect.left;
-  const newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
-  screenLam = Math.max(1, Math.min(XL1, newLam));
+  const my = e.touches[0].clientY - rect.top;
+  let newLam;
+  if (viewPlane === 'yz') {
+    newLam = YL0 + (1 - (my - _layoutFy0) / _layoutFh) * (YL1 - YL0);
+    screenLam = Math.max(0.5, Math.min(ylHalf, newLam));
+  } else {
+    newLam = XL0 + (mx - _layoutFx0) / _layoutFw * (XL1 - XL0);
+    screenLam = Math.max(1, Math.min(XL1, newLam));
+  }
   screenOverride = true;
   const scrSl = document.getElementById('sl-scr');
   if (scrSl) {
@@ -1773,9 +1825,21 @@ function updatePanelVisibility() {
   const dipoleEl = document.getElementById('sg-dipole');
   if (dipoleEl) dipoleEl.style.display = isDipolMode ? '' : 'none';
 
-  // Header controls: always active (Fraunhofer/timeavg are no-ops in FDTD, speed slider is remapped)
+  // Normierter Zeitmittelwert: only meaningful in LW mode (computed analytically there)
+  const btnTA = document.getElementById('btn-timeavg');
+  if (btnTA) {
+    btnTA.disabled = isFDTD;
+    if (isFDTD && showTimeAvg) { showTimeAvg = false; btnTA.classList.remove('active'); }
+  }
 
   // Axis sliders: fully functional in FDTD mode (viewport zoom works independently of engine domain)
+
+  // Obstacle/preset panels only make sense in xy view (Cartesian engine)
+  const _showObs = isFDTD && viewPlane === 'xy';
+  const _elObs = document.getElementById('sg-obstacles');
+  const _elPre = document.getElementById('sg-presets-fdtd');
+  if (_elObs) _elObs.style.display = _showObs ? '' : 'none';
+  if (_elPre) _elPre.style.display = _showObs ? '' : 'none';
 
   // Engine buttons
   document.getElementById('btn-engine-lw')  .classList.toggle('active', !isFDTD);
@@ -1846,13 +1910,18 @@ function recompute() {
   // FDTD path: update shared scalars only, skip phasor / LW work
   if (activeEngineId === 'fdtd') { updateStats(); return; }
 
+  // In yz view the screen is at z=screenLam (horizontal), max=ylHalf; else x=screenLam.
+  const _scrMax = viewPlane === 'yz' ? ylHalf : XL1;
+  const _scrMin = viewPlane === 'yz' ? 0.5 : 1;
   if (!screenOverride) {
-    screenLam = rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85;
+    screenLam = viewPlane === 'yz'
+      ? ylHalf * 0.85
+      : (rFF > 1.0 ? Math.min(rFF, XL1 * 0.88) : XL1 * 0.85);
   }
-  screenLam = Math.max(1, Math.min(XL1, screenLam));
+  screenLam = Math.max(_scrMin, Math.min(_scrMax, screenLam));
   const scrSl = document.getElementById('sl-scr');
   if (scrSl) {
-    scrSl.max   = XL1;
+    scrSl.max   = _scrMax;
     scrSl.value = screenLam.toFixed(1);
     document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
   }
@@ -2101,53 +2170,85 @@ function computeRzScreenPhasors() {
   const k  = 2 * Math.PI * f0 / C_LIGHT;
   const D  = d_lam * lam;
   const minR = MIN_R_LAM * lam;
-  const r_scr = screenLam * lam;
   const M_dip = isDipolMode && !dipolInfinite
     ? Math.max(20, Math.min(300, Math.ceil(L_lam * 16))) : 1;
 
-  for (let j = 0; j < NY_SCR; j++) {
-    const z = ((j/(NY_SCR-1))*2*ylHalf - ylHalf) * lam;
-    let pr = 0, pi = 0;
-    if (isDipolMode && dipolInfinite) {
-      const phi = -k * r_scr;
-      pr = Math.cos(phi); pi = Math.sin(phi);
-    } else if (isDipolMode) {
-      const L = L_lam * lam;
-      for (let m = 0; m < M_dip; m++) {
-        const zp = -L/2 + m/(M_dip-1)*L;
-        const weight = Math.cos(Math.PI * zp / L);
-        const R = Math.sqrt(r_scr*r_scr + (z-zp)*(z-zp));
-        if (R < minR) continue;
-        const sinTh = r_scr / R;
-        const phi   = -k * R;
-        const amp   = weight * sinTh / R;
-        pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
-      }
-    } else {
-      for (let n = 0; n < N_SRC; n++) {
-        const {amp, phase} = srcs[n];
-        if (amp < 1e-6) continue;
-        const yn = (n - (N_SRC-1)/2) * D;
-        let R, sinTh;
-        if (viewPlane === 'xz') {
-          R     = Math.sqrt(r_scr*r_scr + yn*yn + z*z);
-          sinTh = Math.sqrt(r_scr*r_scr + yn*yn) / R;
-        } else {
-          const dy = r_scr - yn;
-          R     = Math.sqrt(dy*dy + z*z);
-          sinTh = Math.abs(dy) / R;
+  if (viewPlane === 'yz') {
+    // Screen at z=screenLam (horizontal), I(y) for y ∈ [−XL1, +XL1]
+    const z_scr = screenLam * lam;
+    for (let j = 0; j < NY_SCR; j++) {
+      const y = (-XL1 + 2 * XL1 * j / (NY_SCR - 1)) * lam;
+      let pr = 0, pi = 0;
+      if (isDipolMode && dipolInfinite) {
+        const phi = -k * Math.abs(z_scr);
+        pr = Math.cos(phi); pi = Math.sin(phi);
+      } else if (isDipolMode) {
+        const L = L_lam * lam;
+        for (let m = 0; m < M_dip; m++) {
+          const zp = -L/2 + m/(M_dip-1)*L;
+          const weight = Math.cos(Math.PI * zp / L);
+          const R = Math.sqrt(y*y + (z_scr-zp)*(z_scr-zp));
+          if (R < minR) continue;
+          const sinTh = Math.abs(y) / R;
+          const phi   = -k * R;
+          const amp   = weight * sinTh / R;
+          pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
         }
-        if (R < minR) continue;
-        const phi = phase - k * R;
-        const a   = amp * sinTh / R;
-        pr += a * Math.cos(phi); pi += a * Math.sin(phi);
+      } else {
+        for (let n = 0; n < N_SRC; n++) {
+          const {amp, phase} = srcs[n];
+          if (amp < 1e-6) continue;
+          const yn = (n - (N_SRC-1)/2) * D;
+          const dy = y - yn;
+          const R  = Math.sqrt(dy*dy + z_scr*z_scr);
+          if (R < minR) continue;
+          const sinTh = Math.abs(dy) / R;
+          const phi = phase - k * R;
+          const a   = amp * sinTh / R;
+          pr += a * Math.cos(phi); pi += a * Math.sin(phi);
+        }
       }
+      re[j] = pr; im[j] = pi;
     }
-    re[j] = pr; im[j] = pi;
+  } else {
+    // xz: screen at r=screenLam (vertical), I(z) for z ∈ [−ylHalf, +ylHalf]
+    const r_scr = screenLam * lam;
+    for (let j = 0; j < NY_SCR; j++) {
+      const z = ((j/(NY_SCR-1))*2*ylHalf - ylHalf) * lam;
+      let pr = 0, pi = 0;
+      if (isDipolMode && dipolInfinite) {
+        const phi = -k * r_scr;
+        pr = Math.cos(phi); pi = Math.sin(phi);
+      } else if (isDipolMode) {
+        const L = L_lam * lam;
+        for (let m = 0; m < M_dip; m++) {
+          const zp = -L/2 + m/(M_dip-1)*L;
+          const weight = Math.cos(Math.PI * zp / L);
+          const R = Math.sqrt(r_scr*r_scr + (z-zp)*(z-zp));
+          if (R < minR) continue;
+          const sinTh = r_scr / R;
+          const phi   = -k * R;
+          const amp   = weight * sinTh / R;
+          pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
+        }
+      } else {
+        for (let n = 0; n < N_SRC; n++) {
+          const {amp, phase} = srcs[n];
+          if (amp < 1e-6) continue;
+          const yn = (n - (N_SRC-1)/2) * D;
+          const R     = Math.sqrt(r_scr*r_scr + yn*yn + z*z);
+          const sinTh = Math.sqrt(r_scr*r_scr + yn*yn) / R;
+          if (R < minR) continue;
+          const phi = phase - k * R;
+          const a   = amp * sinTh / R;
+          pr += a * Math.cos(phi); pi += a * Math.sin(phi);
+        }
+      }
+      re[j] = pr; im[j] = pi;
+    }
   }
   _rzScr.re = re; _rzScr.im = im;
   _rzScrKey = _rzScrKey2();
-  // compute screenAcc
   screenAcc.fill(0);
   for (let j = 0; j < NY_SCR; j++)
     screenAcc[j] = 0.5*(re[j]*re[j]+im[j]*im[j]);
@@ -2237,21 +2338,30 @@ function render(ts) {
         offCtx.putImageData(imgData, 0, 0);
       }
     } else {
-      // Cylindrical: display |E| = √(Ez²+Er²)
-      const Emag = fdtdEngCyl.getField();  // [ir*ANZ+iz]
+      // Cylindrical: display signed Ez with √r compensation for 1/√r cylindrical spreading.
+      // Signed Ez oscillates ±, giving the same blue↔red animation as Cartesian FDTD.
+      const EzF = fdtdEngCyl.getField();  // [ir*ANZ+iz], signed Ez
       const fNR = fdtdEngCyl.ANR, fNZ = fdtdEngCyl.ANZ;
       if (offsc.width !== fNR || offsc.height !== fNZ) {
         offsc.width = fNR; offsc.height = fNZ;
         imgData = offCtx.createImageData(fNR, fNZ);
       }
       if (showEField) {
+        // √r compensation: multiply by √(ir+0.5) so distant wavefronts match near-field amplitude.
         let s2 = 0;
-        for (let k = 0; k < Emag.length; k++) s2 += Emag[k] * Emag[k];
-        const scale = 1 / (Math.sqrt(s2 / Emag.length) * 4 + 1e-30);
+        for (let ir = 0; ir < fNR; ir++) {
+          const rc = Math.sqrt(ir + 0.5);
+          for (let iz = 0; iz < fNZ; iz++) {
+            const v = EzF[ir * fNZ + iz] * rc;
+            s2 += v * v;
+          }
+        }
+        const scale = 1 / (Math.sqrt(s2 / (fNR * fNZ)) * 4 + 1e-30);
         const px = imgData.data;
         for (let ir = 0; ir < fNR; ir++) {
+          const rc = Math.sqrt(ir + 0.5);
           for (let iz = 0; iz < fNZ; iz++) {
-            const rgb = cmRGB(Math.tanh(Emag[ir * fNZ + iz] * scale));
+            const rgb = cmRGB(Math.tanh(EzF[ir * fNZ + iz] * rc * scale));
             const idx = ((fNZ - 1 - iz) * fNR + ir) * 4;
             px[idx]=rgb[0]; px[idx+1]=rgb[1]; px[idx+2]=rgb[2]; px[idx+3]=255;
           }
@@ -2260,7 +2370,9 @@ function render(ts) {
       }
     }
 
-    const sd = activeEng.getScreenData(screenLam);
+    const sd = (viewPlane === 'yz' && isCyl)
+      ? fdtdEngCyl.getScreenDataZ(screenLam, XL1)
+      : activeEng.getScreenData(screenLam);
     for (let j = 0; j < NY_SCR; j++) { screenInst[j] = sd.inst[j]; screenAcc[j] = sd.avg[j]; }
 
     const stats = activeEng.getStats();
@@ -2829,14 +2941,20 @@ function draw() {
     ctx.fillText('Ez  (wird berechnet…)', fx0 + 8, fy0 + 6);
   }
 
-  const xScr = xPx(screenLam);
-  ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh);
   ctx.strokeStyle = 'rgba(60,60,60,0.35)'; ctx.lineWidth = 7;
-  ctx.setLineDash([]); ctx.stroke();
-  ctx.font = fTickB;
-  ctx.fillStyle = GOLD;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('Schirm (' + screenLam.toFixed(1) + ' λ)', xScr + 6, fy0 + 4 + (isMob ? 14 : 18));
+  ctx.setLineDash([]); ctx.font = fTickB; ctx.fillStyle = GOLD;
+  if (viewPlane === 'yz') {
+    // Horizontal screen line at z=screenLam
+    const yScrLine = yPx(screenLam);
+    ctx.beginPath(); ctx.moveTo(fx0, yScrLine); ctx.lineTo(fx0 + fw, yScrLine); ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('Schirm (' + screenLam.toFixed(1) + ' λ)', fx0 + 4, yScrLine - 3);
+  } else {
+    const xScr = xPx(screenLam);
+    ctx.beginPath(); ctx.moveTo(xScr, fy0); ctx.lineTo(xScr, fy0 + fh); ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Schirm (' + screenLam.toFixed(1) + ' λ)', xScr + 6, fy0 + 4 + (isMob ? 14 : 18));
+  }
 
   if (viewPlane !== 'xy') {
     if (viewPlane === 'xz') {
@@ -2909,8 +3027,8 @@ function draw() {
     }
   }
 
-  // ── FDTD obstacles ─────────────────────────────────────────────────────────
-  if (activeEngineId === 'fdtd' && fdtdEngine) {
+  // ── FDTD obstacles (Cartesian engine only — xy view) ────────────────────────
+  if (viewPlane === 'xy' && activeEngineId === 'fdtd' && fdtdEngine) {
     for (const obs of fdtdEngine.getObstaclesInLambda()) {
       const ox0 = xPx(obs.x0λ), oy0 = yPx(obs.y1λ);
       const ox1 = xPx(obs.x1λ), oy1 = yPx(obs.y0λ);
@@ -3188,7 +3306,7 @@ function draw() {
   ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.stroke();
   // Gold: Ī(y/z) + (Fernfeld) on next line
   ctx.fillStyle = GOLD + 'bb';
-  ctx.fillText(viewPlane !== 'xy' ? 'Ī(z)' : 'Ī(y)', RX, LY2);
+  ctx.fillText(viewPlane === 'xz' ? 'Ī(z)' : 'Ī(y)', RX, LY2);
   const tw2 = ctx.measureText('Ī(y)').width;
   ctx.beginPath(); ctx.moveTo(RX - tw2 - gap - swL, LY2); ctx.lineTo(RX - tw2 - gap, LY2);
   ctx.strokeStyle = GOLD + 'bb'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 4]); ctx.stroke();
@@ -3206,7 +3324,7 @@ function draw() {
   ];
   const x2MaxPhys = XL1 * lam;
   const x2u = X2_UNITS.find(u => x2MaxPhys / u.scale >= 0.5) || X2_UNITS[X2_UNITS.length - 1];
-  const x2Min = XL0 * lam / x2u.scale;
+  const x2Min = (viewPlane === 'yz' ? -XL1 : XL0) * lam / x2u.scale;
   const x2Max = XL1 * lam / x2u.scale;
   const x2Rough = (x2Max - x2Min) / 5;
   const x2Exp   = Math.pow(10, Math.floor(Math.log10(x2Rough)));
@@ -3835,6 +3953,7 @@ function applyViewPlane(plane) {
   // Invalidate rz phasor cache when switching planes
   _rzPhasorKey = ''; _rzScrKey = '';
   screenAcc.fill(0); screenInst.fill(0);
+  screenOverride = false;  // let recompute pick a sensible default for the new plane
   // In FDTD mode: spin up/down the cylindrical engine as needed
   if (activeEngineId === 'fdtd' && plane !== 'xy' && !fdtdEngCyl) {
     fdtdEngCyl = _makeCylEngine();
@@ -3842,6 +3961,7 @@ function applyViewPlane(plane) {
   // B-field checkbox: disable in rz (Hφ circles — not drawable as 2D streamlines)
   const chkB = document.getElementById('chk-bfield');
   if (chkB) chkB.disabled = (plane !== 'xy');
+  updatePanelVisibility();
   recompute();
 }
 
