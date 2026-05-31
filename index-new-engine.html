@@ -178,7 +178,8 @@ header { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var
   transition: border-color .15s, color .15s, background .15s; letter-spacing: .04em;
 }
 .engine-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
-.engine-btn:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+.engine-btn:not(:first-child) { border-left: none; }
+.engine-btn:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 .engine-btn.active {
   color: var(--gold); border-color: var(--gold);
   background: color-mix(in srgb, var(--gold) 12%, var(--panel));
@@ -717,8 +718,9 @@ self.onmessage = function(ev) {
   <div class="header-inner">
     <div class="header-title">EM-Wave Lab</div>
     <div class="engine-switch">
-      <button id="btn-engine-lw"   class="engine-btn"        title="Liénard-Wiechert / Phasor">LW</button>
-      <button id="btn-engine-fdtd" class="engine-btn active" title="FDTD Zeitbereich">FDTD</button>
+      <button id="btn-engine-lw"     class="engine-btn"        title="Liénard-Wiechert / Phasor">LW</button>
+      <button id="btn-engine-fdtd"   class="engine-btn active" title="FDTD Zeitbereich">FDTD</button>
+      <button id="btn-engine-lwfull" class="engine-btn"        title="Liénard–Wiechert mit bewegter Quelle (retardierte Position)">L-W⁺</button>
     </div>
     <button class="header-btn" id="btn-play" title="Play / Pause">⏸</button>
     <div class="header-controls">
@@ -781,6 +783,14 @@ self.onmessage = function(ev) {
             </select>
           </div>
         </div>
+      </div>
+      <!-- L-W⁺ oscillation amplitude -->
+      <div class="slider-group" style="color:var(--gold);margin-top:2px" id="sg-lwamp" data-engines="lwfull">
+        <div class="slider-label src-formula">
+          <span class="src-name">Amplitude A</span>
+          <span class="src-eq">A = <span class="pval" id="val-lwamp">0.10</span> λ</span>
+        </div>
+        <input type="range" id="sl-lwamp" min="0.01" max="0.50" step="0.01" value="0.10" style="width:100%">
       </div>
       <!-- Dipole controls: LW only, visibility also managed by applyMode() -->
       <div id="sg-dipole" style="display:none">
@@ -1854,6 +1864,7 @@ canvas.addEventListener('touchend', e => {
 
 // ── Engine management ─────────────────────────────────────────────────────────
 let activeEngineId = 'lw';
+let lwFullAmpLam   = 0.10;   // L-W⁺ oscillation amplitude in λ units
 let viewPlane      = 'xy';   // 'xy' | 'xz' | 'yz'
 let fdtdEngine     = null;
 let fdtdEngCyl     = null;   // cylindrical (r,z) FDTD for xz/yz views
@@ -1882,8 +1893,8 @@ function updatePanelVisibility() {
   // Normierter Zeitmittelwert: only meaningful in LW mode (computed analytically there)
   const btnTA = document.getElementById('btn-timeavg');
   if (btnTA) {
-    btnTA.disabled = isFDTD;
-    if (isFDTD && showTimeAvg) { showTimeAvg = false; btnTA.classList.remove('active'); }
+    btnTA.disabled = isFDTD || activeEngineId === 'lwfull';
+    if ((isFDTD || activeEngineId === 'lwfull') && showTimeAvg) { showTimeAvg = false; btnTA.classList.remove('active'); }
   }
 
   // Axis sliders: fully functional in FDTD mode (viewport zoom works independently of engine domain)
@@ -1896,8 +1907,9 @@ function updatePanelVisibility() {
   if (_elPre) _elPre.style.display = _showObs ? '' : 'none';
 
   // Engine buttons
-  document.getElementById('btn-engine-lw')  .classList.toggle('active', !isFDTD);
-  document.getElementById('btn-engine-fdtd').classList.toggle('active',  isFDTD);
+  document.getElementById('btn-engine-lw')    .classList.toggle('active', activeEngineId === 'lw');
+  document.getElementById('btn-engine-fdtd')  .classList.toggle('active', activeEngineId === 'fdtd');
+  document.getElementById('btn-engine-lwfull').classList.toggle('active', activeEngineId === 'lwfull');
 }
 
 function switchEngine(id) {
@@ -1945,6 +1957,11 @@ function switchEngine(id) {
     screenAcc.fill(0); screenInst.fill(0);
     _loadArea.classList.remove('reloading');
     _loadBarEl.style.width = '0%';
+  } else if (id === 'lwfull') {
+    activeEngineId = 'lwfull';
+    fdtdDrawMode = false;
+    screenAcc.fill(0); screenInst.fill(0); acc2D.fill(0);
+    recompute();
   } else {
     // Switch back to LW — keep the current FDTD viewport (Option C)
     activeEngineId = 'lw';
@@ -1968,8 +1985,15 @@ function recompute() {
       : (N_SRC <= 1) ? 0
       : 2 * (N_SRC - 1) * (N_SRC - 1) * d_lam * d_lam;
 
-  // FDTD path: update shared scalars only, skip phasor / LW work
+  // Grid coordinates needed by both LW and L-W⁺ (lwfull reads xGrid/yGrid per frame)
+  for (let i = 0; i < NX; i++)
+    xGrid[i] = (XL0 + (XL1 - XL0) * i / (NX - 1)) * lam;
+  for (let j = 0; j < NY; j++)
+    yGrid[j] = (YL0 + (YL1 - YL0) * j / (NY - 1)) * lam;
+
+  // FDTD / L-W⁺: update shared scalars only, per-frame computation handles the rest
   if (activeEngineId === 'fdtd') { updateStats(); return; }
+  if (activeEngineId === 'lwfull') { updateStats(); return; }
 
   // Screen: vertical line at x=screenLam (all views). In yz, also mirrored at −screenLam.
   const _scrMax = XL1;
@@ -1985,10 +2009,6 @@ function recompute() {
     document.getElementById('val-scr').textContent = screenLam.toFixed(1) + ' λ';
   }
 
-  for (let i = 0; i < NX; i++)
-    xGrid[i] = (XL0 + (XL1 - XL0) * i / (NX - 1)) * lam;
-  for (let j = 0; j < NY; j++)
-    yGrid[j] = (YL0 + (YL1 - YL0) * j / (NY - 1)) * lam;
   for (let i = 0; i < NX; i++)
     for (let j = 0; j < NY; j++)
       rEff[i*NY+j] = Math.sqrt(xGrid[i]*xGrid[i] + yGrid[j]*yGrid[j]) + 1e-10;
@@ -2297,6 +2317,108 @@ function computeRzField(t) {
   return Ez;
 }
 
+// ── L-W⁺: Full Liénard–Wiechert with actual retarded source position ─────────
+function computeLWFullField(t) {
+  // Returns Float32Array[NX*NY]: field projected onto source polarization direction p̂
+  const field = new Float32Array(NX * NY);
+  const omega  = 2 * Math.PI * f0;
+  const D      = d_lam * lam;
+  const isXZ   = viewPlane === 'xz';
+  const isYZ   = viewPlane === 'yz';
+  const isXY   = viewPlane === 'xy';
+
+  for (let n = 0; n < N_SRC; n++) {
+    const { amp, phase, px, py, pz } = srcs[n];
+    if (amp < 1e-6) continue;
+    const A   = amp * lwFullAmpLam * lam;         // physical oscillation amplitude
+    const yn0 = (n - (N_SRC - 1) / 2) * D;       // equilibrium y position (source array along y)
+
+    for (let i = 0; i < NX; i++) {
+      for (let j = 0; j < NY; j++) {
+        // Compute 3D field-point coordinates for this view
+        let xf, yf, zf;
+        if (isXY) {
+          xf = xGrid[i]; yf = yGrid[j]; zf = 0;
+        } else if (isXZ) {
+          xf = (XL1 * i / (NX - 1)) * lam; yf = 0; zf = ((j / (NY - 1)) * 2 * ylHalf - ylHalf) * lam;
+        } else { // yz
+          xf = 0; yf = (-XL1 + 2 * XL1 * i / (NX - 1)) * lam; zf = ((j / (NY - 1)) * 2 * ylHalf - ylHalf) * lam;
+        }
+
+        // Distance from equilibrium position (initial retarded-time guess)
+        const dx0 = xf - 0, dy0 = yf - yn0, dz0 = zf - 0;
+        const R0  = Math.sqrt(dx0*dx0 + dy0*dy0 + dz0*dz0);
+        if (R0 < 1e-12) continue;
+
+        // Solve retarded time via Newton iteration
+        let tret = t - R0 / C_LIGHT;
+        let xs, ys, zs, dx, dy, dz, R_ret;
+        for (let iter = 0; iter < 3; iter++) {
+          const sinP = Math.sin(omega * tret + phase);
+          const cosP = Math.cos(omega * tret + phase);
+          xs = px * A * sinP;
+          ys = yn0 + py * A * sinP;
+          zs = pz * A * sinP;
+          const vx = px * A * omega * cosP;
+          const vy = py * A * omega * cosP;
+          const vz = pz * A * omega * cosP;
+          dx = xf - xs; dy = yf - ys; dz = zf - zs;
+          R_ret = Math.sqrt(dx*dx + dy*dy + dz*dz);
+          if (R_ret < 1e-12) { R_ret = 1e-12; break; }
+          const vdotn = (vx*dx + vy*dy + vz*dz) / R_ret;
+          const fval  = R_ret - C_LIGHT * (t - tret);
+          tret       -= fval / (-vdotn + C_LIGHT);
+        }
+
+        // Final retarded quantities
+        const sinP = Math.sin(omega * tret + phase);
+        const cosP = Math.cos(omega * tret + phase);
+        xs = px * A * sinP;
+        ys = yn0 + py * A * sinP;
+        zs = pz * A * sinP;
+        const vx = px * A * omega * cosP;
+        const vy = py * A * omega * cosP;
+        const vz = pz * A * omega * cosP;
+        const ax = -px * A * omega * omega * sinP;
+        const ay = -py * A * omega * omega * sinP;
+        const az = -pz * A * omega * omega * sinP;
+        dx = xf - xs; dy = yf - ys; dz = zf - zs;
+        const R = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        if (R < 1e-12) continue;
+        const nx = dx/R, ny_h = dy/R, nz_h = dz/R;
+
+        // Full relativistic L-W
+        const bx = vx/C_LIGHT, by = vy/C_LIGHT, bz = vz/C_LIGHT;
+        const beta2 = bx*bx + by*by + bz*bz;
+        const gamma2inv = 1 - beta2;               // 1/γ²
+        const beta_n  = bx*nx + by*ny_h + bz*nz_h; // β·n̂
+        const kappa   = 1 - beta_n;                  // κ
+        const kappa3  = kappa * kappa * kappa;
+
+        // n̂ - β
+        const nmb_x = nx - bx, nmb_y = ny_h - by, nmb_z = nz_h - bz;
+
+        // Velocity field: (n̂-β) / (γ² κ³ R²) = (n̂-β) * (1-β²) / (κ³ R²)
+        const vel_k = gamma2inv / (kappa3 * R * R);
+        const Evx = nmb_x * vel_k;
+        const Evy = nmb_y * vel_k;
+        const Evz = nmb_z * vel_k;
+
+        // Radiation field: [(n̂·a)(n̂-β) - κ·a] / (c κ³ R)
+        const ndota  = nx*ax + ny_h*ay + nz_h*az;
+        const rad_k  = 1 / (C_LIGHT * kappa3 * R);
+        const Erx = (ndota * nmb_x - kappa * ax) * rad_k;
+        const Ery = (ndota * nmb_y - kappa * ay) * rad_k;
+        const Erz = (ndota * nmb_z - kappa * az) * rad_k;
+
+        // Project onto source polarization p̂ for signed scalar display
+        field[i * NY + j] += px*(Evx+Erx) + py*(Evy+Ery) + pz*(Evz+Erz);
+      }
+    }
+  }
+  return field;
+}
+
 // Screen phasors for rz: evaluate at r = screenLam*lam, varying z
 const _rzScr = { re: null, im: null };
 let   _rzScrKey = '';
@@ -2415,6 +2537,41 @@ function render(ts) {
 
   const dt = lastTs === null ? 0 : Math.min((ts - lastTs) / 1000, 0.05);
   lastTs = ts;
+
+  // ── L-W⁺ branch (full Liénard–Wiechert) ─────────────────────────────────────
+  if (activeEngineId === 'lwfull') {
+    if (!isPaused) {
+      simTime += dt * animSpeed;
+      if (XL1 > 0) _loadBarEl.style.width = ((simTime % XL1) / XL1 * 100).toFixed(2) + '%';
+    }
+    if (offsc.width !== NX || offsc.height !== NY) {
+      offsc.width = NX; offsc.height = NY;
+      imgData = offCtx.createImageData(NX, NY);
+    }
+    const Elw = computeLWFullField(simTime * T_per);
+    if (showEField) {
+      // Normalize using RMS with tanh compression (same as existing LW renderer)
+      let s2 = 0;
+      for (let k = 0; k < Elw.length; k++) s2 += Elw[k] * Elw[k];
+      const scale = 1 / (Math.sqrt(s2 / Elw.length) * 4 + 1e-30);
+      const px_data = imgData.data;
+      for (let i = 0; i < NX; i++) {
+        for (let j = 0; j < NY; j++) {
+          const rgb = cmRGB(Math.tanh(Elw[i*NY+j] * scale));
+          const idx = ((NY-1-j)*NX+i)*4;
+          px_data[idx]=rgb[0]; px_data[idx+1]=rgb[1]; px_data[idx+2]=rgb[2]; px_data[idx+3]=255;
+        }
+      }
+      offCtx.putImageData(imgData, 0, 0);
+    }
+    // Update running time-average for acc2D (slow exponential average)
+    const avgW = 0.05;
+    for (let k = 0; k < NX*NY; k++) acc2D[k] = (1-avgW)*acc2D[k] + avgW*Elw[k]*Elw[k];
+    // No screen computation for L-W⁺ (too complex for first version)
+    screenInst.fill(0); screenAcc.fill(0);
+    draw();
+    return;
+  }
 
   // ── FDTD branch ───────────────────────────────────────────────────────────
   if (activeEngineId === 'fdtd') {
@@ -3173,8 +3330,11 @@ function draw() {
         // In xz: horizontal=r(x), vertical=z. Show selected source arrow.
         const s = srcs[selectedSrc];
         const osc = Math.cos(2*Math.PI * s.fmul * simTime + s.phase);
-        _drawSrcDot(x0, y0);
-        _drawSrcArrow(x0, y0, s.px, s.pz, s.py, osc * s.amp, arrowPx);
+        const lwOscXZ = (activeEngineId === 'lwfull') ? s.amp * lwFullAmpLam * Math.sin(2*Math.PI*s.fmul*simTime + s.phase) : 0;
+        const xpXZ = xPx(s.px * lwOscXZ);
+        const ypXZ = yPx(s.pz * lwOscXZ);
+        _drawSrcDot(xpXZ, ypXZ);
+        _drawSrcArrow(xpXZ, ypXZ, s.px, s.pz, s.py, osc * s.amp, arrowPx);
         // Note when TE source has null along r-axis
         const hasPz = srcs.slice(0, N_SRC).some(s => Math.abs(s.pz) > 0.1);
         if (!hasPz) {
@@ -3201,9 +3361,11 @@ function draw() {
         for (let n = 0; n < N_SRC; n++) {
           if (srcs[n].amp < 1e-6) continue;
           const yn = (n - (N_SRC - 1) / 2) * D;
-          const xp = xPx(yn), yp = yPx(0);
           const s = srcs[n];
           const osc = Math.cos(2*Math.PI * s.fmul * simTime + s.phase);
+          const lwOscYZ = (activeEngineId === 'lwfull') ? s.amp * lwFullAmpLam * Math.sin(2*Math.PI*s.fmul*simTime + s.phase) : 0;
+          const xp = xPx(yn + s.py * lwOscYZ);
+          const yp = yPx(s.pz * lwOscYZ);
           _drawSrcDot(xp, yp);
           // yz: horizontal=py, vertical=pz, out-of-plane=px
           _drawSrcArrow(xp, yp, s.py, s.pz, s.px, osc * s.amp, arrowPx);
@@ -3242,9 +3404,11 @@ function draw() {
     for (let n = 0; n < N_SRC; n++) {
       if (srcs[n].amp < 1e-6) continue;
       const yn = (n - (N_SRC - 1) / 2) * d_lam;
-      const xp = xPx(0), yp = yPx(yn);
       const s = srcs[n];
       const osc = Math.cos(2*Math.PI * s.fmul * simTime + s.phase);
+      const lwOsc = (activeEngineId === 'lwfull') ? s.amp * lwFullAmpLam * Math.sin(2*Math.PI*s.fmul*simTime + s.phase) : 0;
+      const xp = xPx(s.px * lwOsc);
+      const yp = yPx(yn + s.py * lwOsc);
       _drawSrcDot(xp, yp);
       _drawSrcArrow(xp, yp, s.px, s.py, s.pz, osc * s.amp, arrowPx);
     }
@@ -4296,8 +4460,16 @@ document.getElementById('sel-view-plane').addEventListener('change', function() 
 });
 
 // ── Engine switcher ───────────────────────────────────────────────────────────
-document.getElementById('btn-engine-lw')  .addEventListener('click', () => switchEngine('lw'));
-document.getElementById('btn-engine-fdtd').addEventListener('click', () => switchEngine('fdtd'));
+document.getElementById('btn-engine-lw')    .addEventListener('click', () => switchEngine('lw'));
+document.getElementById('btn-engine-fdtd')  .addEventListener('click', () => switchEngine('fdtd'));
+document.getElementById('btn-engine-lwfull').addEventListener('click', () => switchEngine('lwfull'));
+
+// ── L-W⁺ amplitude slider ─────────────────────────────────────────────────────
+document.getElementById('sl-lwamp').addEventListener('input', function() {
+  lwFullAmpLam = Number(this.value);
+  document.getElementById('val-lwamp').textContent = lwFullAmpLam.toFixed(2);
+  acc2D.fill(0);
+});
 
 // ── FDTD obstacle draw mode ───────────────────────────────────────────────────
 function canvasPxToLambda(cx, cy) {
