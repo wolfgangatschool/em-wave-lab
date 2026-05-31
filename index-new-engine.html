@@ -770,6 +770,17 @@ self.onmessage = function(ev) {
           </div>
           <input type="range" id="sl-d" min="1" max="1000" value="100" step="1">
         </div>
+        <!-- Global oscillation direction for all point sources -->
+        <div class="slider-group" style="color:var(--text-dim);margin-top:2px" id="sg-pol-all">
+          <div class="slider-label src-formula">
+            <span class="src-name">Schwingungsrichtung</span>
+            <select id="sel-pol-all" style="flex:1;min-width:0;font-size:0.85em">
+              <option value="z" selected>Z (TM)</option>
+              <option value="x">X (TE)</option>
+              <option value="y">Y (TE)</option>
+            </select>
+          </div>
+        </div>
       </div>
       <!-- Dipole controls: LW only, visibility also managed by applyMode() -->
       <div id="sg-dipole" style="display:none">
@@ -832,6 +843,33 @@ self.onmessage = function(ev) {
         </div>
         <input type="range" id="sl-src-p" min="-24" max="24" step="1" value="0">
       </div>
+      <div id="sg-src-pol">
+      <div class="slider-group" style="color:var(--text-dim)">
+        <div class="slider-label src-formula">
+          <span class="src-name">Polarisierung</span>
+          <select id="sel-src-pol" style="flex:1;min-width:0;font-size:0.85em">
+            <option value="z">Z (TM)</option>
+            <option value="x">X (TE)</option>
+            <option value="y">Y (TE)</option>
+            <option value="custom">θ / φ</option>
+          </select>
+        </div>
+      </div>
+      <div id="src-pol-custom" style="display:none;color:var(--text-dim)">
+        <div class="slider-group">
+          <div class="slider-label src-formula">
+            <span class="src-name">θ (von Z)</span><span class="src-eq pval" id="val-src-theta">0°</span>
+          </div>
+          <input type="range" id="sl-src-theta" min="0" max="180" step="5" value="0">
+        </div>
+        <div class="slider-group">
+          <div class="slider-label src-formula">
+            <span class="src-name">φ (in XY)</span><span class="src-eq pval" id="val-src-phi">0°</span>
+          </div>
+          <input type="range" id="sl-src-phi" min="0" max="355" step="5" value="0">
+        </div>
+      </div>
+      </div><!-- end sg-src-pol -->
       <select id="sel-presets" class="preset-btn preset-drop" style="margin-top:6px;width:100%">
         <option value="" disabled selected>Presets…</option>
         <option value="alt">Alt. Phase</option>
@@ -852,6 +890,16 @@ self.onmessage = function(ev) {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;user-select:none">
         <label><input type="checkbox" id="chk-efield" checked> E-Feld</label>
         <label><input type="checkbox" id="chk-bfield" checked> B-Feldlinien</label>
+      </div>
+      <div id="sg-analyser" style="display:none">
+        <div class="slider-label src-formula" style="margin-top:4px">
+          <span class="src-name">Feld-Analysator α</span><span class="src-eq pval" id="val-alpha">0°</span>
+        </div>
+        <input type="range" id="sl-alpha" min="0" max="180" step="1" value="0" style="width:100%">
+        <div class="slider-label src-formula" style="margin-top:4px">
+          <span class="src-name">Schirm-Analysator β</span><span class="src-eq pval" id="val-beta">0°</span>
+        </div>
+        <input type="range" id="sl-beta" min="0" max="180" step="1" value="0" style="width:100%">
       </div>
     </div>
 
@@ -1618,7 +1666,9 @@ const F0_SCALES = [{l:'µHz',s:1e-6},{l:'mHz',s:1e-3},{l:'Hz',s:1},{l:'kHz',s:1e
 let f0_unit_idx = 5;  // GHz
 
 const MAX_SRC = 1000;
-let srcs = Array.from({length: MAX_SRC}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0}));
+let srcs = Array.from({length: MAX_SRC}, () => ({amp: 1.0, fmul: 1.0, phase: 0.0, px: 0, py: 0, pz: 1}));
+let polAlpha = 0;  // 2D field display mixer (0 = TM/z-channel, π/2 = TE/transverse-channel)
+let polBeta  = 0;  // screen analyzer angle (independent of polAlpha)
 
 // Above this N, skip Liénard-Wiechert worker and use scalar phasor model instead
 const WS_LW_THRESHOLD = 30;
@@ -2084,34 +2134,87 @@ let   _rzPhasorKey = '';                    // invalidation key
 
 function _rzKey() {
   return `${viewPlane}|${N_SRC}|${d_lam.toFixed(6)}|${f0}|${XL1.toFixed(4)}|${ylHalf.toFixed(4)}|`
-       + srcs.slice(0, N_SRC).map(s => `${s.amp.toFixed(3)},${s.fmul.toFixed(4)},${s.phase.toFixed(4)}`).join(';')
+       + srcs.slice(0, N_SRC).map(s =>
+           `${s.amp.toFixed(3)},${s.fmul.toFixed(4)},${s.phase.toFixed(4)},${s.px.toFixed(3)},${s.py.toFixed(3)},${s.pz.toFixed(3)}`
+         ).join(';')
        + `|L${isDipolMode ? L_lam.toFixed(4) : 'pt'}`;
 }
 
+// Helper: amplitude factors for TM and TE channels at a field point.
+// TM: |(0,0,pz) × r̂| = |pz| * sinθ_z  (z-component of dipole, azimuthal pattern)
+// TE: |(px,py,0) × r̂| (transverse component, in-plane cross-product magnitude)
+// Returns { tmAmp, tmPhaseExtra, teAmp }
+function _rzDipoleFactors(px, py, pz, r_field, yn, z_field, R) {
+  // r̂ from source at (0, yn, 0) depends on view:
+  // xz: r̂ = (r_field, -yn, z_field)/R   (r_field is the radial coordinate)
+  // yz: r̂ = (0, r_field - yn, z_field)/R  (r_field is the y-coordinate)
+  // Both paths produce same formulas when we write (rx, ry, rz) = direction from source to field.
+  // Caller sets r_field and yn appropriately per view (see computeRzPhasors).
+
+  // TM: |(0,0,pz) × r̂| — the azimuthal (ŷ-equivalent) component
+  // pz > 0: positive; pz < 0: same magnitude, π phase shift
+  const tmAmp = Math.abs(pz) / R;  // will be multiplied by sinTh_z separately
+  const tmPhaseExtra = pz < 0 ? Math.PI : 0;
+
+  // TE: |(px,py,0) × r̂| — magnitude of in-plane cross product
+  // For xz view: r̂ = (r_field, -yn, z_field)/R
+  // cx_perp × r̂:
+  //   x-comp: py*z_field/R - 0*(-yn/R) = py*z_field/R
+  //   y-comp: 0*r_field/R - px*z_field/R = -px*z_field/R
+  //   z-comp: px*(-yn/R) - py*r_field/R = -(px*yn + py*r_field)/R
+  // For yz view: r̂ = (0, dy, z_field)/R  where dy = r_field - yn
+  //   x-comp: py*z_field/R - 0*dy/R = py*z_field/R
+  //   y-comp: 0*0 - px*z_field/R = -px*z_field/R
+  //   z-comp: px*dy/R - py*0 = px*dy/R
+  // We pre-compute the three components passed in via yn/r_field (see caller).
+  return { tmAmp, tmPhaseExtra };
+}
+
+function _teCrossProduct(px, py, r_field, yn, z_field, R, isYZ) {
+  // Computes |(px,py,0) × r̂| for both xz and yz views.
+  let cx, cy, cz;
+  if (!isYZ) {
+    // xz: r̂ = (r_field, -yn, z_field)/R
+    cx = py * z_field / R;
+    cy = -px * z_field / R;
+    cz = -(px * yn + py * r_field) / R;
+  } else {
+    // yz: r̂ = (0, dy, z_field)/R  where dy = r_field - yn
+    const dy = r_field - yn;
+    cx = py * z_field / R;
+    cy = -px * z_field / R;
+    cz =  px * dy / R;
+  }
+  return Math.sqrt(cx*cx + cy*cy + cz*cz);
+}
+
 function computeRzPhasors() {
-  const re = new Float32Array(NX * NY);
-  const im = new Float32Array(NX * NY);
-  const D  = d_lam * lam;
-  const k  = 2 * Math.PI * f0 / C_LIGHT;
+  const reTM = new Float32Array(NX * NY);
+  const imTM = new Float32Array(NX * NY);
+  const reTE = new Float32Array(NX * NY);
+  const imTE = new Float32Array(NX * NY);
+  const D    = d_lam * lam;
+  const k    = 2 * Math.PI * f0 / C_LIGHT;
   const minR = MIN_R_LAM * lam;
+  const isYZ = viewPlane === 'yz';
   const M_dip = isDipolMode && !dipolInfinite
     ? Math.max(20, Math.min(300, Math.ceil(L_lam * 16))) : 1;
 
   for (let i = 0; i < NX; i++) {
     // xz: r = 0..XL1;  yz: y = -XL1..+XL1 (centred)
-    const r = viewPlane === 'yz'
+    const r = isYZ
       ? (-XL1 + 2 * XL1 * i / (NX - 1)) * lam
       : (XL1 * i / (NX - 1)) * lam;
     for (let j = 0; j < NY; j++) {
       const z = ((j / (NY - 1)) * 2 * ylHalf - ylHalf) * lam;
 
-      let pr = 0, pi = 0;
+      let prTM = 0, piTM = 0, prTE = 0, piTE = 0;
       if (isDipolMode && dipolInfinite) {
-        // Plane wave in r direction, uniform in z
-        const phase = -k * Math.abs(r);
-        pr += Math.cos(phase); pi += Math.sin(phase);
+        // Plane wave — dipole mode: TM only (z-directed)
+        const phi = -k * Math.abs(r);
+        prTM += Math.cos(phi); piTM += Math.sin(phi);
       } else if (isDipolMode) {
-        // Finite dipole: sum of Hertzian elements along z at r=0 (y=0 in yz)
+        // Finite dipole: sum of Hertzian z-elements — TM only
         const L = L_lam * lam;
         for (let m = 0; m < M_dip; m++) {
           const zp = -L/2 + m/(M_dip-1)*L;
@@ -2120,50 +2223,77 @@ function computeRzPhasors() {
           if (R < minR) continue;
           const sinTh = Math.abs(r) / R;
           const phi   = -k * R;
-          const amp   = weight * sinTh / R;
-          pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
+          const a     = weight * sinTh / R;
+          prTM += a * Math.cos(phi); piTM += a * Math.sin(phi);
         }
       } else {
-        // N point sources
+        // N point sources — dual TM/TE channels
         for (let n = 0; n < N_SRC; n++) {
-          const {amp, phase} = srcs[n];
+          const {amp, phase, px, py, pz} = srcs[n];
           if (amp < 1e-6) continue;
           const yn = (n - (N_SRC-1)/2) * D;
-          let R, sinTh;
-          if (viewPlane === 'xz') {
-            R     = Math.sqrt(r*r + yn*yn + z*z);
-            sinTh = Math.sqrt(r*r + yn*yn) / R;
-          } else { // yz
-            const dy = r - yn;  // r is the y-coordinate in yz view
-            R     = Math.sqrt(dy*dy + z*z);
-            sinTh = Math.abs(dy) / R;
+          let R, sinThZ;
+          if (!isYZ) {
+            R      = Math.sqrt(r*r + yn*yn + z*z);
+            sinThZ = Math.sqrt(r*r + yn*yn) / R;
+          } else {
+            const dy = r - yn;
+            R      = Math.sqrt(dy*dy + z*z);
+            sinThZ = Math.abs(dy) / R;
           }
           if (R < minR) continue;
           const phi = phase - k * R;
-          const a   = amp * sinTh / R;
-          pr += a * Math.cos(phi); pi += a * Math.sin(phi);
+          const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+
+          // TM channel: |pz| * sinThZ / R, sign via pz
+          if (Math.abs(pz) > 1e-6) {
+            const aTM  = amp * Math.abs(pz) * sinThZ / R;
+            const phEx = pz < 0 ? Math.PI : 0;
+            const cP   = Math.cos(phi + phEx), sP = Math.sin(phi + phEx);
+            prTM += aTM * cP; piTM += aTM * sP;
+          }
+
+          // TE channel: |(px,py,0) × r̂| / R
+          if (px*px + py*py > 1e-12) {
+            const aTE = amp * _teCrossProduct(px, py, r, yn, z, R, isYZ) / R;
+            prTE += aTE * cosPhi; piTE += aTE * sinPhi;
+          }
         }
       }
-      re[i*NY+j] = pr; im[i*NY+j] = pi;
+      reTM[i*NY+j] = prTM; imTM[i*NY+j] = piTM;
+      reTE[i*NY+j] = prTE; imTE[i*NY+j] = piTE;
     }
   }
-  _rzPhasor.re = re; _rzPhasor.im = im;
+  _rzPhasor.reTM = reTM; _rzPhasor.imTM = imTM;
+  _rzPhasor.reTE = reTE; _rzPhasor.imTE = imTE;
   _rzPhasorKey = _rzKey();
 
-  // Build acc2D for rz view (used in draw / intensity bar)
-  acc2D.fill(0);
-  for (let k2 = 0; k2 < NX*NY; k2++)
-    acc2D[k2] = 0.5 * (re[k2]*re[k2] + im[k2]*im[k2]);
+  _rzUpdateAcc2D();
+}
+
+function _rzUpdateAcc2D() {
+  const { reTM, imTM, reTE, imTE } = _rzPhasor;
+  if (!reTM) return;
+  const cA = Math.cos(polAlpha), sA = Math.sin(polAlpha);
+  for (let k2 = 0; k2 < NX*NY; k2++) {
+    const re = cA * reTM[k2] + sA * reTE[k2];
+    const im = cA * imTM[k2] + sA * imTE[k2];
+    acc2D[k2] = 0.5 * (re*re + im*im);
+  }
 }
 
 function computeRzField(t) {
   if (_rzPhasorKey !== _rzKey()) computeRzPhasors();
-  const { re, im } = _rzPhasor;
+  const { reTM, imTM, reTE, imTE } = _rzPhasor;
   const om = 2 * Math.PI * f0;
   const ct = Math.cos(om * t), st = Math.sin(om * t);
+  const cA = Math.cos(polAlpha), sA = Math.sin(polAlpha);
   const Ez = new Float32Array(NX * NY);
-  for (let k2 = 0; k2 < NX*NY; k2++)
-    Ez[k2] = re[k2]*ct - im[k2]*st;
+  for (let k2 = 0; k2 < NX*NY; k2++) {
+    const re = cA * reTM[k2] + sA * reTE[k2];
+    const im = cA * imTM[k2] + sA * imTE[k2];
+    Ez[k2] = re*ct - im*st;
+  }
   return Ez;
 }
 
@@ -2171,96 +2301,103 @@ function computeRzField(t) {
 const _rzScr = { re: null, im: null };
 let   _rzScrKey = '';
 
-function _rzScrKey2() { return _rzKey() + '|scr' + screenLam.toFixed(4); }
+function _rzScrKey2() { return _rzKey() + '|scr' + screenLam.toFixed(4) + '|b' + polBeta.toFixed(4); }
 
 function computeRzScreenPhasors() {
-  const re = new Float64Array(NY_SCR);
-  const im = new Float64Array(NY_SCR);
-  const k  = 2 * Math.PI * f0 / C_LIGHT;
-  const D  = d_lam * lam;
+  const reTM = new Float64Array(NY_SCR);
+  const imTM = new Float64Array(NY_SCR);
+  const reTE = new Float64Array(NY_SCR);
+  const imTE = new Float64Array(NY_SCR);
+  const k    = 2 * Math.PI * f0 / C_LIGHT;
+  const D    = d_lam * lam;
   const minR = MIN_R_LAM * lam;
+  const isYZ = viewPlane === 'yz';
   const M_dip = isDipolMode && !dipolInfinite
     ? Math.max(20, Math.min(300, Math.ceil(L_lam * 16))) : 1;
 
-  if (viewPlane === 'yz') {
-    // Screen at y=screenLam (vertical, mirrored at −screenLam), I(z) for z ∈ [−ylHalf, +ylHalf]
-    const y_scr = screenLam * lam;
-    for (let j = 0; j < NY_SCR; j++) {
-      const z = ((j / (NY_SCR - 1)) * 2 * ylHalf - ylHalf) * lam;
-      let pr = 0, pi = 0;
-      if (isDipolMode && dipolInfinite) {
-        const phi = -k * y_scr;
-        pr = Math.cos(phi); pi = Math.sin(phi);
-      } else if (isDipolMode) {
-        const L = L_lam * lam;
-        for (let m = 0; m < M_dip; m++) {
-          const zp = -L/2 + m/(M_dip-1)*L;
-          const weight = Math.cos(Math.PI * zp / L);
-          const R = Math.sqrt(y_scr*y_scr + (z-zp)*(z-zp));
-          if (R < minR) continue;
-          const sinTh = y_scr / R;
-          const phi   = -k * R;
-          const amp   = weight * sinTh / R;
-          pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
+  const scr = isYZ ? screenLam * lam : screenLam * lam;  // y_scr or r_scr
+
+  for (let j = 0; j < NY_SCR; j++) {
+    const z = ((j / (NY_SCR - 1)) * 2 * ylHalf - ylHalf) * lam;
+    let prTM = 0, piTM = 0, prTE = 0, piTE = 0;
+
+    if (isDipolMode && dipolInfinite) {
+      const phi = -k * scr;
+      prTM = Math.cos(phi); piTM = Math.sin(phi);
+    } else if (isDipolMode) {
+      const L = L_lam * lam;
+      for (let m = 0; m < M_dip; m++) {
+        const zp = -L/2 + m/(M_dip-1)*L;
+        const weight = Math.cos(Math.PI * zp / L);
+        const R = Math.sqrt(scr*scr + (z-zp)*(z-zp));
+        if (R < minR) continue;
+        const sinTh = scr / R;
+        const phi   = -k * R;
+        const a     = weight * sinTh / R;
+        prTM += a * Math.cos(phi); piTM += a * Math.sin(phi);
+      }
+    } else {
+      for (let n = 0; n < N_SRC; n++) {
+        const {amp, phase, px, py, pz} = srcs[n];
+        if (amp < 1e-6) continue;
+        const yn = (n - (N_SRC-1)/2) * D;
+        let R, sinThZ;
+        if (!isYZ) {
+          // xz: screen at r=scr, field point (scr, 0, z)
+          R      = Math.sqrt(scr*scr + yn*yn + z*z);
+          sinThZ = Math.sqrt(scr*scr + yn*yn) / R;
+        } else {
+          // yz: screen at y=scr, field point (0, scr, z)
+          const dy = scr - yn;
+          R      = Math.sqrt(dy*dy + z*z);
+          sinThZ = Math.abs(dy) / R;
         }
-      } else {
-        for (let n = 0; n < N_SRC; n++) {
-          const {amp, phase} = srcs[n];
-          if (amp < 1e-6) continue;
-          const yn = (n - (N_SRC-1)/2) * D;
-          const dy = y_scr - yn;
-          const R  = Math.sqrt(dy*dy + z*z);
-          if (R < minR) continue;
-          const sinTh = Math.abs(dy) / R;
-          const phi = phase - k * R;
-          const a   = amp * sinTh / R;
-          pr += a * Math.cos(phi); pi += a * Math.sin(phi);
+        if (R < minR) continue;
+        const phi = phase - k * R;
+        const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+
+        // TM channel
+        if (Math.abs(pz) > 1e-6) {
+          const aTM  = amp * Math.abs(pz) * sinThZ / R;
+          const phEx = pz < 0 ? Math.PI : 0;
+          prTM += aTM * Math.cos(phi + phEx);
+          piTM += aTM * Math.sin(phi + phEx);
+        }
+        // TE channel
+        if (px*px + py*py > 1e-12) {
+          const aTE = amp * _teCrossProduct(px, py, scr, yn, z, R, isYZ) / R;
+          prTE += aTE * cosPhi; piTE += aTE * sinPhi;
         }
       }
-      re[j] = pr; im[j] = pi;
     }
-  } else {
-    // xz: screen at r=screenLam (vertical), I(z) for z ∈ [−ylHalf, +ylHalf]
-    const r_scr = screenLam * lam;
-    for (let j = 0; j < NY_SCR; j++) {
-      const z = ((j/(NY_SCR-1))*2*ylHalf - ylHalf) * lam;
-      let pr = 0, pi = 0;
-      if (isDipolMode && dipolInfinite) {
-        const phi = -k * r_scr;
-        pr = Math.cos(phi); pi = Math.sin(phi);
-      } else if (isDipolMode) {
-        const L = L_lam * lam;
-        for (let m = 0; m < M_dip; m++) {
-          const zp = -L/2 + m/(M_dip-1)*L;
-          const weight = Math.cos(Math.PI * zp / L);
-          const R = Math.sqrt(r_scr*r_scr + (z-zp)*(z-zp));
-          if (R < minR) continue;
-          const sinTh = r_scr / R;
-          const phi   = -k * R;
-          const amp   = weight * sinTh / R;
-          pr += amp * Math.cos(phi); pi += amp * Math.sin(phi);
-        }
-      } else {
-        for (let n = 0; n < N_SRC; n++) {
-          const {amp, phase} = srcs[n];
-          if (amp < 1e-6) continue;
-          const yn = (n - (N_SRC-1)/2) * D;
-          const R     = Math.sqrt(r_scr*r_scr + yn*yn + z*z);
-          const sinTh = Math.sqrt(r_scr*r_scr + yn*yn) / R;
-          if (R < minR) continue;
-          const phi = phase - k * R;
-          const a   = amp * sinTh / R;
-          pr += a * Math.cos(phi); pi += a * Math.sin(phi);
-        }
-      }
-      re[j] = pr; im[j] = pi;
-    }
+    reTM[j] = prTM; imTM[j] = piTM;
+    reTE[j] = prTE; imTE[j] = piTE;
   }
-  _rzScr.re = re; _rzScr.im = im;
+
+  _rzScr.reTM = reTM; _rzScr.imTM = imTM;
+  _rzScr.reTE = reTE; _rzScr.imTE = imTE;
   _rzScrKey = _rzScrKey2();
+
+  // Combine with current α and store into screenAcc
+  const cA = Math.cos(polAlpha), sA = Math.sin(polAlpha);
   screenAcc.fill(0);
-  for (let j = 0; j < NY_SCR; j++)
-    screenAcc[j] = 0.5*(re[j]*re[j]+im[j]*im[j]);
+  for (let j = 0; j < NY_SCR; j++) {
+    const re = cA * reTM[j] + sA * reTE[j];
+    const im = cA * imTM[j] + sA * imTE[j];
+    screenAcc[j] = 0.5*(re*re + im*im);
+  }
+}
+
+function _rzScrApplyBeta() {
+  // Apply β (screen analyzer) to already-computed screen phasors
+  const { reTM, imTM, reTE, imTE } = _rzScr;
+  if (!reTM) return;
+  const cB = Math.cos(polBeta), sB = Math.sin(polBeta);
+  for (let j = 0; j < NY_SCR; j++) {
+    const re = cB * reTM[j] + sB * reTE[j];
+    const im = cB * imTM[j] + sB * imTE[j];
+    screenAcc[j] = 0.5*(re*re + im*im);
+  }
 }
 
 function iScreen() {
@@ -2426,8 +2563,11 @@ function render(ts) {
     if (_rzScrKey !== _rzScrKey2()) computeRzScreenPhasors();
     const om_scr = 2 * Math.PI * f0, t_scr = simTime * T_per;
     const ct = Math.cos(om_scr * t_scr), st2 = Math.sin(om_scr * t_scr);
+    const cA_scr = Math.cos(polBeta), sA_scr = Math.sin(polBeta);
     for (let j = 0; j < NY_SCR; j++) {
-      const v = _rzScr.re[j]*ct - _rzScr.im[j]*st2;
+      const re = cA_scr * _rzScr.reTM[j] + sA_scr * _rzScr.reTE[j];
+      const im = cA_scr * _rzScr.imTM[j] + sA_scr * _rzScr.imTE[j];
+      const v = re*ct - im*st2;
       screenInst[j] = v * v;
     }
     draw();
@@ -2976,10 +3116,50 @@ function draw() {
     ctx.fillText('Schirm (' + screenLam.toFixed(1) + ' λ)', xScr + 6, fy0 + 4 + (isMob ? 14 : 18));
   }
 
+  // ── Source rendering: dot + oscillating direction arrow ─────────────────────
+  // Arrow shows the dipole direction projected onto the view plane, animated
+  // with the current oscillation. Out-of-plane component shown as pulsing ring.
+  function _drawSrcDot(xp, yp) {
+    ctx.beginPath(); ctx.arc(xp, yp, 3.5, 0, 2*Math.PI);
+    ctx.fillStyle = BG; ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+  }
+  function _drawSrcArrow(xp, yp, hComp, vComp, oop, osc, arrowPx) {
+    // hComp/vComp: in-plane dipole components (canvas: right/up), oop: out-of-plane
+    const inMag = Math.sqrt(hComp*hComp + vComp*vComp);
+    if (inMag > 1e-6) {
+      // Static range indicator (dim dashes)
+      ctx.save();
+      ctx.strokeStyle = isLight ? 'rgba(180,130,0,0.35)' : 'rgba(255,200,0,0.30)';
+      ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+      ctx.beginPath();
+      ctx.moveTo(xp - hComp*arrowPx, yp + vComp*arrowPx);
+      ctx.lineTo(xp + hComp*arrowPx, yp - vComp*arrowPx);
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+      // Animated tip
+      const tipX = xp + hComp * osc * arrowPx;
+      const tipY = yp - vComp * osc * arrowPx;
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(xp, yp); ctx.lineTo(tipX, tipY); ctx.stroke();
+      ctx.beginPath(); ctx.arc(tipX, tipY, 3.5, 0, 2*Math.PI);
+      ctx.fillStyle = GOLD; ctx.fill();
+    }
+    // Out-of-plane: pulsing ring (positive oop = dot coming toward viewer)
+    if (Math.abs(oop) > 0.05) {
+      const r = 3.5 + Math.abs(oop * osc) * 5;
+      ctx.beginPath(); ctx.arc(xp, yp, Math.max(1, r), 0, 2*Math.PI);
+      ctx.strokeStyle = oop * osc > 0
+        ? (isLight ? 'rgba(200,140,0,0.75)' : 'rgba(255,210,0,0.75)')
+        : (isLight ? 'rgba(120,80,0,0.50)' : 'rgba(160,130,0,0.50)');
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+
   if (viewPlane !== 'xy') {
+    const arrowPx = 14;
     if (viewPlane === 'xz') {
-      // xz: source on axis (r=0, z=0); only FDTD/dipole (single source on z-axis)
-      const x0 = xPx(0);
+      const x0 = xPx(0), y0 = yPx(0);
       if (isDipolMode && !dipolInfinite) {
         ctx.beginPath();
         ctx.moveTo(x0, yPx( L_lam / 2));
@@ -2990,14 +3170,23 @@ function draw() {
         ctx.beginPath(); ctx.arc(x0, yPx(-L_lam / 2), 3, 0, 2 * Math.PI);
         ctx.fillStyle = GOLD; ctx.fill();
       } else {
-        ctx.beginPath(); ctx.arc(x0, yPx(0), 4, 0, 2 * Math.PI);
-        ctx.fillStyle = BG; ctx.fill();
-        ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+        // In xz: horizontal=r(x), vertical=z. Show selected source arrow.
+        const s = srcs[selectedSrc];
+        const osc = Math.cos(2*Math.PI * s.fmul * simTime + s.phase);
+        _drawSrcDot(x0, y0);
+        _drawSrcArrow(x0, y0, s.px, s.pz, s.py, osc * s.amp, arrowPx);
+        // Note when TE source has null along r-axis
+        const hasPz = srcs.slice(0, N_SRC).some(s => Math.abs(s.pz) > 0.1);
+        if (!hasPz) {
+          ctx.font = isMob ? '10px sans-serif' : '11px sans-serif';
+          ctx.fillStyle = isLight ? 'rgba(100,100,100,0.8)' : 'rgba(200,200,200,0.7)';
+          ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+          ctx.fillText('TE: Abstrahlung entlang z — für yz-Ansicht wechseln', x0 + 8, y0 + 8);
+        }
       }
     } else {
-      // yz: horizontal axis is y (centered). Sources at (y=y_n, z=0).
+      // yz: horizontal=y, vertical=z. Sources at (y=yn, z=0).
       if (isDipolMode && !dipolInfinite) {
-        // Finite dipole at y=0, spanning z=±L/2
         const x0 = xPx(0);
         ctx.beginPath();
         ctx.moveTo(x0, yPx( L_lam / 2));
@@ -3008,42 +3197,56 @@ function draw() {
         ctx.beginPath(); ctx.arc(x0, yPx(-L_lam / 2), 3, 0, 2 * Math.PI);
         ctx.fillStyle = GOLD; ctx.fill();
       } else {
-        // N point sources distributed along y
         const D = d_lam;
         for (let n = 0; n < N_SRC; n++) {
           if (srcs[n].amp < 1e-6) continue;
-          const yn = (n - (N_SRC - 1) / 2) * D;  // y_n in λ units
+          const yn = (n - (N_SRC - 1) / 2) * D;
           const xp = xPx(yn), yp = yPx(0);
-          ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
-          ctx.fillStyle = BG; ctx.fill();
-          ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+          const s = srcs[n];
+          const osc = Math.cos(2*Math.PI * s.fmul * simTime + s.phase);
+          _drawSrcDot(xp, yp);
+          // yz: horizontal=py, vertical=pz, out-of-plane=px
+          _drawSrcArrow(xp, yp, s.py, s.pz, s.px, osc * s.amp, arrowPx);
         }
       }
     }
   } else if (isDipolMode) {
-    const x0 = xPx(0);
+    // xy view: dipole is z-directed (into screen) → appears as a dot with ⊙ symbol
+    const x0 = xPx(0), y0 = yPx(0);
     if (dipolInfinite) {
       ctx.beginPath(); ctx.moveTo(x0, fy0); ctx.lineTo(x0, fy0 + fh);
       ctx.strokeStyle = GOLD; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.stroke();
       ctx.setLineDash([]);
     } else {
-      ctx.beginPath();
-      ctx.moveTo(x0, yPx( L_lam / 2));
-      ctx.lineTo(x0, yPx(-L_lam / 2));
-      ctx.strokeStyle = GOLD; ctx.lineWidth = 7; ctx.setLineDash([]); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x0, yPx( L_lam / 2), 3, 0, 2 * Math.PI);
-      ctx.fillStyle = GOLD; ctx.fill();
-      ctx.beginPath(); ctx.arc(x0, yPx(-L_lam / 2), 3, 0, 2 * Math.PI);
-      ctx.fillStyle = GOLD; ctx.fill();
+      // Dot + oscillating out-of-plane indicator (z-dipole seen end-on)
+      const osc = Math.cos(2 * Math.PI * simTime);
+      ctx.beginPath(); ctx.arc(x0, y0, 5, 0, 2*Math.PI);
+      ctx.fillStyle = BG; ctx.fill();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+      // Pulsing ring showing current z-oscillation direction
+      const rPulse = 5 + Math.abs(osc) * 8;
+      ctx.beginPath(); ctx.arc(x0, y0, rPulse, 0, 2*Math.PI);
+      ctx.strokeStyle = osc > 0
+        ? (isLight ? 'rgba(200,140,0,0.70)' : 'rgba(255,210,0,0.70)')
+        : (isLight ? 'rgba(120,80,0,0.45)' : 'rgba(160,130,0,0.45)');
+      ctx.lineWidth = 1.5; ctx.stroke();
+      // Label showing z-direction
+      ctx.font = isMob ? '9px sans-serif' : '10px sans-serif';
+      ctx.fillStyle = isLight ? 'rgba(160,110,0,0.9)' : 'rgba(255,200,0,0.8)';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('⊙ z', x0, y0 - 14);
     }
   } else {
+    // xy: horizontal=x, vertical=y, out-of-plane=z (into screen)
+    const arrowPx = Math.min(14, Math.max(6, 60 / N_SRC));
     for (let n = 0; n < N_SRC; n++) {
       if (srcs[n].amp < 1e-6) continue;
       const yn = (n - (N_SRC - 1) / 2) * d_lam;
       const xp = xPx(0), yp = yPx(yn);
-      ctx.beginPath(); ctx.arc(xp, yp, 4, 0, 2 * Math.PI);
-      ctx.fillStyle = BG; ctx.fill();
-      ctx.strokeStyle = GOLD; ctx.lineWidth = 1.8; ctx.stroke();
+      const s = srcs[n];
+      const osc = Math.cos(2*Math.PI * s.fmul * simTime + s.phase);
+      _drawSrcDot(xp, yp);
+      _drawSrcArrow(xp, yp, s.px, s.py, s.pz, osc * s.amp, arrowPx);
     }
   }
 
@@ -3425,6 +3628,30 @@ function buildRows() {
   document.getElementById('sg-d').classList.toggle('disabled', N_SRC <= 1);
 }
 
+function _srcPolKey(s) {
+  if (Math.abs(s.pz - 1) < 1e-6 && Math.abs(s.px) < 1e-6 && Math.abs(s.py) < 1e-6) return 'z';
+  if (Math.abs(s.px - 1) < 1e-6 && Math.abs(s.py) < 1e-6 && Math.abs(s.pz) < 1e-6) return 'x';
+  if (Math.abs(s.py - 1) < 1e-6 && Math.abs(s.px) < 1e-6 && Math.abs(s.pz) < 1e-6) return 'y';
+  return 'custom';
+}
+function _applyPolDirection(s, key, thetaDeg, phiDeg) {
+  if (key === 'z') { s.px = 0; s.py = 0; s.pz = 1; }
+  else if (key === 'x') { s.px = 1; s.py = 0; s.pz = 0; }
+  else if (key === 'y') { s.px = 0; s.py = 1; s.pz = 0; }
+  else {
+    const th = thetaDeg * Math.PI / 180, ph = phiDeg * Math.PI / 180;
+    s.px = Math.sin(th) * Math.cos(ph);
+    s.py = Math.sin(th) * Math.sin(ph);
+    s.pz = Math.cos(th);
+  }
+}
+function _updateAnalyserVisibility() {
+  const isRZ = viewPlane !== 'xy';
+  const elA = document.getElementById('sg-analyser');
+  const elP = document.getElementById('sg-src-pol');
+  if (elA) elA.style.display = isRZ ? '' : 'none';
+  if (elP) elP.style.display = isRZ ? '' : 'none';
+}
 function syncRows() {
   const s = srcs[selectedSrc];
   slSrcA.value = Math.round(s.amp  * 10);
@@ -3433,10 +3660,66 @@ function syncRows() {
   document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
   document.getElementById('val-src-f').value = +(slSrcF.value / 10).toFixed(1);
   { const n = +(slSrcP.value / 12).toFixed(2); document.getElementById('val-src-p').value = (n >= 0 ? '+ ' : '- ') + Math.abs(n).toFixed(2); }
+  // Direction UI — per-source dropdown
+  const polKey = _srcPolKey(s);
+  const selPol = document.getElementById('sel-src-pol');
+  if (selPol) selPol.value = polKey;
+  // Global dropdown: reflect selection only when all sources share the same z/x/y direction
+  const selPolAll = document.getElementById('sel-pol-all');
+  if (selPolAll) {
+    const allSame = srcs.slice(0, N_SRC).every(r => _srcPolKey(r) === polKey);
+    if (allSame && polKey !== 'custom') selPolAll.value = polKey;
+  }
+  const customDiv = document.getElementById('src-pol-custom');
+  if (customDiv) customDiv.style.display = polKey === 'custom' ? '' : 'none';
+  if (polKey === 'custom') {
+    const theta = Math.round(Math.acos(Math.max(-1,Math.min(1,s.pz))) * 180 / Math.PI);
+    const phi   = Math.round(Math.atan2(s.py, s.px) * 180 / Math.PI + 360) % 360;
+    const slTh = document.getElementById('sl-src-theta');
+    const slPh = document.getElementById('sl-src-phi');
+    if (slTh) { slTh.value = theta; document.getElementById('val-src-theta').textContent = theta + '°'; }
+    if (slPh) { slPh.value = phi;   document.getElementById('val-src-phi').textContent   = phi   + '°'; }
+  }
   screenAcc.fill(0);
 }
 
 selSrc.addEventListener('change', () => { selectedSrc = Number(selSrc.value); syncRows(); });
+
+// ── Polarization direction handlers ──────────────────────────────────────────
+function _onPolChange() {
+  const selPol = document.getElementById('sel-src-pol');
+  const key    = selPol ? selPol.value : 'z';
+  const customDiv = document.getElementById('src-pol-custom');
+  if (customDiv) customDiv.style.display = key === 'custom' ? '' : 'none';
+  const thetaDeg = Number(document.getElementById('sl-src-theta')?.value || 0);
+  const phiDeg   = Number(document.getElementById('sl-src-phi')?.value   || 0);
+  _applyPolDirection(srcs[selectedSrc], key, thetaDeg, phiDeg);
+  screenAcc.fill(0); acc2D.fill(0);
+  recompute();
+}
+document.getElementById('sel-src-pol').addEventListener('change', _onPolChange);
+document.getElementById('sl-src-theta').addEventListener('input', function() {
+  document.getElementById('val-src-theta').textContent = this.value + '°';
+  _onPolChange();
+});
+document.getElementById('sl-src-phi').addEventListener('input', function() {
+  document.getElementById('val-src-phi').textContent = this.value + '°';
+  _onPolChange();
+});
+
+// ── Feld-Analysator α (2D colormap only) ─────────────────────────────────────
+document.getElementById('sl-alpha').addEventListener('input', function() {
+  polAlpha = Number(this.value) * Math.PI / 180;
+  document.getElementById('val-alpha').textContent = this.value + '°';
+  _rzUpdateAcc2D();  // α controls 2D colormap only
+});
+// ── Schirm-Analysator β (screen only) ────────────────────────────────────────
+document.getElementById('sl-beta').addEventListener('input', function() {
+  polBeta = Number(this.value) * Math.PI / 180;
+  document.getElementById('val-beta').textContent = this.value + '°';
+  _rzScrApplyBeta();
+  _rzScrKey = '';  // invalidate so screen panel re-renders on next frame
+});
 slSrcA.addEventListener('input', () => {
   srcs[selectedSrc].amp  = slSrcA.value / 10;
   document.getElementById('val-src-a').value = +(slSrcA.value / 10).toFixed(1);
@@ -3460,7 +3743,14 @@ slSrcP.addEventListener('input', () => {
 
 function readGlobals() {
   const newN = Number(document.getElementById('sl-N').value);
-  if (newN !== N_SRC) { N_SRC = newN; buildRows(); }
+  if (newN !== N_SRC) {
+    if (newN > N_SRC) {
+      // stamp global direction onto newly-added source slots
+      const globalKey = document.getElementById('sel-pol-all')?.value || 'z';
+      for (let n = N_SRC; n < newN; n++) _applyPolDirection(srcs[n], globalKey, 0, 0);
+    }
+    N_SRC = newN; buildRows();
+  }
 
   recompute();
 
@@ -3632,6 +3922,18 @@ function applyDipolControls() {
   recompute();
 }
 document.getElementById('sel-mode').addEventListener('change', applyMode);
+
+document.getElementById('sel-pol-all').addEventListener('change', function() {
+  const key = this.value;  // 'z' | 'x' | 'y'
+  for (let n = 0; n < N_SRC; n++) _applyPolDirection(srcs[n], key, 0, 0);
+  // Sync per-source dropdown to match
+  const selPol = document.getElementById('sel-src-pol');
+  if (selPol) selPol.value = key;
+  const customDiv = document.getElementById('src-pol-custom');
+  if (customDiv) customDiv.style.display = 'none';
+  screenAcc.fill(0); acc2D.fill(0);
+  recompute();
+});
 document.getElementById('chk-infinite').addEventListener('change', applyDipolControls);
 document.getElementById('sl-L').addEventListener('input', applyDipolControls);
 
@@ -3935,7 +4237,7 @@ initSliderControls([
 ]);
 
 document.body.classList.add('light');
-buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisplay(); syncLoadBarSpeed(); workerInit();
+buildRows(); readGlobals(); updateDDisplay(); updateF0Display(); updateTempoDisplay(); syncLoadBarSpeed(); workerInit(); _updateAnalyserVisibility();
 // reflect initial lock state on button
 { const b = document.getElementById('btn-lock'); b.textContent = 'X=Y'; b.classList.add('active'); }
 
@@ -3977,6 +4279,7 @@ function applyViewPlane(plane) {
   _rzPhasorKey = ''; _rzScrKey = '';
   screenAcc.fill(0); screenInst.fill(0);
   screenOverride = false;  // let recompute pick a sensible default for the new plane
+  _updateAnalyserVisibility();
   // In FDTD mode: spin up/down the cylindrical engine as needed
   if (activeEngineId === 'fdtd' && plane !== 'xy' && !fdtdEngCyl) {
     fdtdEngCyl = _makeCylEngine();
